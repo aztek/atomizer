@@ -6,10 +6,10 @@
 
 -export([main/1]).
 
--type atoms() :: [{atom(), Line :: pos_integer()}].
--type location() :: {file:filename(), Line :: pos_integer()}.
+-type atoms()         :: [{atom(), Line :: pos_integer()}].
+-type location()      :: {file:filename(), Line :: pos_integer()}.
 -type bag(Key, Value) :: #{Key => [Value]}.
--type result(Value) :: {ok, Value} | {error, term()}.
+-type result(Value)   :: {ok, Value} | {error, term()}.
 
 -spec main([string()]) -> no_return().
 main(CmdArgs) ->
@@ -38,23 +38,23 @@ display_atoms(Atoms) ->
 -spec display_atom(atom(), [location()]) -> ok.
 display_atom(Atom, Locations) ->
   io:format("~p~n", [Atom]),
-  lists:foreach(fun ({F, L}) -> io:format("~s:~p~n", [filename:absname(F), L]) end,
-                lists:sort(Locations)),
+  lists:foreach(fun display_location/1, lists:sort(Locations)),
   io:format("~n").
+
+-spec display_location(location()) -> ok.
+display_location({F, L}) -> io:format("~s:~p~n", [filename:absname(F), L]).
 
 -spec atomize_files([file:filename()]) -> result(bag(atom(), location())).
 atomize_files(FileNames) ->
-  lists:foldl(fun (FileName, Bag) ->
-                case Bag of
-                  {ok, Bag0} -> case atomize_file(FileName) of
-                                  {ok, Bag1} -> {ok, append_bags(Bag0, Bag1)};
-                                  Error -> Error
-                                end;
-                  Error -> Error
-                end
+  lists:foldl(fun (FileName, {ok, Bag}) ->
+                    case atomize_file(FileName) of
+                      {ok, Bag1} -> {ok, append_bags(Bag, Bag1)};
+                      Error -> Error
+                    end;
+                  (_, Error) -> Error
               end, {ok, #{}}, FileNames).
 
--spec atomize_file(FileName :: file:filename()) -> result(bag(atom(), location())).
+-spec atomize_file(file:filename()) -> result(bag(atom(), location())).
 atomize_file(FileName) ->
   Atomize = fun (Forms) ->
     Atoms = lists:flatmap(fun atomize_form/1, Forms),
@@ -66,7 +66,7 @@ atomize_file(FileName) ->
     {error, Error} -> {error, Error}
   end.
 
--spec to_bag([{Key, Value :: term()}]) -> bag(Key, Value) when
+-spec to_bag([{Key, Value}]) -> bag(Key, Value) when
   Key   :: term(),
   Value :: term().
 to_bag(List) ->
@@ -75,7 +75,8 @@ to_bag(List) ->
                 maps:put(Key, [Value|Values], Bag)
               end, #{}, List).
 
--spec atomize_form(erl_parse:abstract_form() | erl_parse:form_info()) -> atoms().
+-spec atomize_form (erl_parse:abstract_form()) -> atoms();
+                   (erl_parse:form_info())     -> [].
 atomize_form(Form) -> case Form of
   {attribute, _, module,      _} -> [];
   {attribute, _, behavior,    _} -> [];
@@ -109,7 +110,7 @@ atomize_expr(Expr) -> case Expr of
   {tuple,     _,       Es} -> lists:flatmap(fun atomize_expr/1, Es);
   {nil,       _          } -> [];
   {cons,      _,     H, T} -> atomize_expr(H) ++ atomize_expr(T);
-  {bin,       _,      BEs} -> lists:flatmap(fun atomize_binelement/1, BEs);
+  {bin,       _,      BEs} -> lists:flatmap(fun atomize_bin_element/1, BEs);
   {op,        _, _,  A, B} -> atomize_expr(A) ++ atomize_expr(B);
   {op,        _, _,     E} -> atomize_expr(E);
   {record,    _,    _, Fs} -> lists:flatmap(fun atomize_record_field/1, Fs);
@@ -142,14 +143,14 @@ atomize_expr(Expr) -> case Expr of
   {named_fun, _, _, Cs} -> lists:flatmap(fun atomize_clause/1, Cs)
 end.
 
--spec atomize_binelement(erl_parse:af_binelement(erl_parse:abstract_expr())) -> atoms().
-atomize_binelement(BinElement) -> case BinElement of
+-spec atomize_bin_element(erl_parse:af_binelement(erl_parse:abstract_expr())) -> atoms().
+atomize_bin_element(BinElement) -> case BinElement of
   {bin_element, _, E, default, _} -> atomize_expr(E);
   {bin_element, _, E, S,       _} -> atomize_expr(E) ++ atomize_expr(S)
 end.
 
--spec atomize_binelement_pattern(erl_parse:af_binelement(erl_parse:af_pattern())) -> atoms().
-atomize_binelement_pattern(BinElement) -> case BinElement of
+-spec atomize_bin_element_pattern(erl_parse:af_binelement(erl_parse:af_pattern())) -> atoms().
+atomize_bin_element_pattern(BinElement) -> case BinElement of
   {bin_element, _, E, default, _} -> atomize_pattern(E);
   {bin_element, _, E, S,       _} -> atomize_pattern(E) ++ atomize_pattern(S)
 end.
@@ -184,7 +185,7 @@ atomize_pattern(Pattern) -> case Pattern of
   {tuple,   _,        Ps} -> lists:flatmap(fun atomize_pattern/1, Ps);
   {nil,     _           } -> [];
   {cons,    _,    P1, P2} -> atomize_pattern(P1) ++ atomize_pattern(P2);
-  {bin,     _,        Bs} -> lists:flatmap(fun atomize_binelement_pattern/1, Bs);
+  {bin,     _,        Bs} -> lists:flatmap(fun atomize_bin_element_pattern/1, Bs);
   {op,      _, _, P1, P2} -> atomize_pattern(P1) ++ atomize_pattern(P2);
   {op,      _, _,      P} -> atomize_pattern(P);
   {map,     _,        As} -> lists:flatmap(fun atomize_assoc/1, As);
@@ -203,7 +204,7 @@ atomize_guard(Guard) -> case Guard of
   {tuple,   _,        Gs} -> lists:flatmap(fun atomize_guard/1, Gs);
   {nil,     _           } -> [];
   {cons,    _,    G1, G2} -> atomize_guard(G1) ++ atomize_guard(G2);
-  {bin,     _,       BEs} -> lists:flatmap(fun atomize_binelement/1, BEs);
+  {bin,     _,       BEs} -> lists:flatmap(fun atomize_bin_element/1, BEs);
   {op,      _, _, G1, G2} -> atomize_guard(G1) ++ atomize_guard(G2);
   {op,      _, _,      G} -> atomize_guard(G);
   {record,  _,     _, Fs} -> lists:flatmap(fun atomize_record_field_guard/1, Fs);
