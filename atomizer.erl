@@ -185,8 +185,7 @@ atomize_guard({var,          _,         _}) -> [];
 atomize_guard({tuple,        _,        Gs}) -> lists:flatmap(fun atomize_guard/1, Gs);
 atomize_guard({nil,          _           }) -> [];
 atomize_guard({cons,         _,    G1, G2}) -> atomize_guard(G1) ++ atomize_guard(G2);
-atomize_guard({bin_element,  _, G, default, _}) -> atomize_guard(G);
-atomize_guard({bin_element,  _, G, E,       _}) -> atomize_guard(G) ++ atomize_expr(E);
+atomize_guard({bin,          _,       BEs}) -> lists:flatmap(fun atomize_binelement/1, BEs);
 atomize_guard({op,           _, _, G1, G2}) -> atomize_guard(G1) ++ atomize_guard(G2);
 atomize_guard({op,           _, _,      G}) -> atomize_guard(G);
 atomize_guard({record,       _,     _, Fs}) -> lists:flatmap(fun atomize_record_field_guard/1, Fs);
@@ -205,7 +204,8 @@ atomize_assoc({map_field_exact, _, K, V}) -> atomize_expr(K) ++ atomize_expr(V).
 
 -spec atomize_qualifier(erl_parse:af_qualifier()) -> atoms().
 atomize_qualifier({generate,   _, P, E}) -> atomize_pattern(P) ++ atomize_expr(E);
-atomize_qualifier({b_generate, _, P, E}) -> atomize_pattern(P) ++ atomize_expr(E).
+atomize_qualifier({b_generate, _, P, E}) -> atomize_pattern(P) ++ atomize_expr(E);
+atomize_qualifier(E) -> atomize_expr(E).
 
 -spec atomize_type(erl_parse:abstract_type()) -> atoms().
 atomize_type({type, _, any})                 -> [];
