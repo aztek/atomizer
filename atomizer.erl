@@ -26,8 +26,9 @@ main(CmdArgs) ->
   Key   :: term(),
   Value :: term().
 append_bags(Bag1, Bag2) ->
-  Append = fun (Key, Set, Bag) -> sets:union(Set, maps:get(Key, Bag, sets:new())) end,
-  maps:fold(Append, Bag2, Bag1).
+  maps:fold(fun (Key, Set, Bag) ->
+    maps:update_with(Key, fun (Set1) -> sets:union(Set, Set1) end, Set, Bag)
+  end, Bag2, Bag1).
 
 -spec display_atoms(bag(atom(), location())) -> ok.
 display_atoms(Atoms) ->
