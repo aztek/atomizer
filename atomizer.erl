@@ -124,7 +124,7 @@ atomize_expr(Expr) -> case Expr of
   {map,       _, E,    As} -> atomize_expr(E) ++ lists:flatmap(fun atomize_assoc/1, As);
   {'catch',   _, E       } -> atomize_expr(E);
   {call,      _, {atom, _, _}, Es} -> lists:flatmap(fun atomize_expr/1, Es);
-  {call,      _, E,    Es} -> atomize_expr(E) ++ lists:flatmap(fun atomize_expr/1, Es);
+  {call,      _, E,    Es} -> lists:flatmap(fun atomize_expr/1, [E | Es]);
   {lc,        _,    T, Qs} -> atomize_expr(T) ++ lists:flatmap(fun atomize_qualifier/1, Qs);
   {bc,        _,    T, Qs} -> atomize_expr(T) ++ lists:flatmap(fun atomize_qualifier/1, Qs);
   {block,     _,       Es} -> lists:flatmap(fun atomize_expr/1, Es);
@@ -235,30 +235,30 @@ end.
 
 -spec atomize_type(erl_parse:abstract_type()) -> atoms().
 atomize_type(Type) -> case Type of
-  {type, _, any}                 -> [];
-  {type, _, binary,           _} -> [];
-  {type, _, nil,              _} -> [];
-  {type, _, 'fun',           Ts} -> lists:flatmap(fun atomize_type/1, Ts);
-  {type, _, product,         Ts} -> lists:flatmap(fun atomize_type/1, Ts);
-  {type, _, range,            _} -> [];
-  {type, _, map,            any} -> [];
+  {type, _, any}           -> [];
+  {type, _, binary,     _} -> [];
+  {type, _, nil,        _} -> [];
+  {type, _, 'fun',     Ts} -> lists:flatmap(fun atomize_type/1, Ts);
+  {type, _, product,   Ts} -> lists:flatmap(fun atomize_type/1, Ts);
+  {type, _, range,      _} -> [];
+  {type, _, map,      any} -> [];
   {type, _, map_field_assoc, Ts} -> lists:flatmap(fun atomize_type/1, Ts);
   {type, _, map_field_exact, Ts} -> lists:flatmap(fun atomize_type/1, Ts);
-  {type, _, record,           _} -> [];
-  {type, _, field_type,       _} -> [];
-  {type, _, tuple,          any} -> [];
-  {type, _, tuple,           Ts} -> lists:flatmap(fun atomize_type/1, Ts);
-  {type, _, union,           Ts} -> lists:flatmap(fun atomize_type/1, Ts);
-  {type, _, _,               Ts} -> lists:flatmap(fun atomize_type/1, Ts);
-  {ann_type,    _,           Ts} -> lists:flatmap(fun atomize_type/1, Ts);
-  {remote_type, _,            _} -> [];
-  {atom,        L,            A} -> [{A, L}];
-  {char,        _,            _} -> [];
-  {integer,     _,            _} -> [];
-  {op,          _,         _, _} -> [];
-  {op,          _,      _, _, _} -> [];
-  {var,         _,            _} -> [];
-  {user_type,   _,        _, Ts} -> lists:flatmap(fun atomize_type/1, Ts)
+  {type, _, record,     _} -> [];
+  {type, _, field_type, _} -> [];
+  {type, _, tuple,    any} -> [];
+  {type, _, tuple,     Ts} -> lists:flatmap(fun atomize_type/1, Ts);
+  {type, _, union,     Ts} -> lists:flatmap(fun atomize_type/1, Ts);
+  {type, _, _,         Ts} -> lists:flatmap(fun atomize_type/1, Ts);
+  {ann_type,    _,     Ts} -> lists:flatmap(fun atomize_type/1, Ts);
+  {remote_type, _,      _} -> [];
+  {atom,        L,      A} -> [{A, L}];
+  {char,        _,      _} -> [];
+  {integer,     _,      _} -> [];
+  {op,          _,   _, _} -> [];
+  {op,          _, _, _, _} -> [];
+  {var,         _,       _} -> [];
+  {user_type,   _,   _, Ts} -> lists:flatmap(fun atomize_type/1, Ts)
 end.
 
 -spec atomize_function_type(FunctionType) -> atoms() when
