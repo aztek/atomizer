@@ -142,13 +142,15 @@ atomize_expr(Expr) -> case Expr of
   {named_fun, _, _, Cs} -> lists:flatmap(fun atomize_clause/1, Cs)
 end.
 
--spec atomize_bin_element(erl_parse:af_binelement(erl_parse:abstract_expr())) -> atoms().
+-spec atomize_bin_element(BinElement) -> atoms() when
+  BinElement :: erl_parse:af_binelement(erl_parse:abstract_expr()).
 atomize_bin_element(BinElement) -> case BinElement of
   {bin_element, _, E, default, _} -> atomize_expr(E);
   {bin_element, _, E, S,       _} -> atomize_expr(E) ++ atomize_expr(S)
 end.
 
--spec atomize_bin_element_pattern(erl_parse:af_binelement(erl_parse:af_pattern())) -> atoms().
+-spec atomize_bin_element_pattern(BinElement) -> atoms() when
+  BinElement :: erl_parse:af_binelement(erl_parse:af_pattern()).
 atomize_bin_element_pattern(BinElement) -> case BinElement of
   {bin_element, _, E, default, _} -> atomize_pattern(E);
   {bin_element, _, E, S,       _} -> atomize_pattern(E) ++ atomize_pattern(S)
@@ -214,7 +216,8 @@ atomize_guard(Guard) -> case Guard of
   {record_field, _, G, _, _} -> atomize_guard(G)
 end.
 
--spec atomize_record_field_guard(erl_parse:af_record_field(erl_parse:af_guard_test())) -> atoms().
+-spec atomize_record_field_guard(RecordField) -> atoms() when
+  RecordField :: erl_parse:af_record_field(erl_parse:af_guard_test()).
 atomize_record_field_guard({record_field, _, _, G}) -> atomize_guard(G).
 
 -spec atomize_assoc(erl_parse:af_assoc(erl_parse:abstract_expr())) -> atoms().
@@ -259,7 +262,8 @@ atomize_type(Type) -> case Type of
 end.
 
 -spec atomize_function_type(FunctionType) -> atoms() when
-  FunctionType :: erl_parse:af_constrained_function_type() | erl_parse:af_function_type().
+  FunctionType :: erl_parse:af_constrained_function_type()
+                | erl_parse:af_function_type().
 atomize_function_type(FunctionType) -> case FunctionType of
   {type, _, bounded_fun, Ts} ->
     lists:flatmap(fun (Tts) when is_list(Tts) -> lists:flatmap(fun atomize_constraint/1, Tts);
