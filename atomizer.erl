@@ -37,7 +37,7 @@ display_atoms(Atoms) ->
 
 -spec display_atom(atom(), [location()]) -> ok.
 display_atom(Atom, Locations) ->
-  io:format("~s~n", [Atom]),
+  io:format("~p~n", [Atom]),
   lists:foreach(fun ({F, L}) -> io:format("~s:~p~n", [filename:absname(F), L]) end,
                 lists:sort(Locations)),
   io:format("~n").
