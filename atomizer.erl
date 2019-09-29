@@ -8,7 +8,7 @@
 
 -type atoms()         :: [{atom(), Line :: pos_integer()}].
 -type location()      :: {file:filename(), Line :: pos_integer()}.
--type bag(Key, Value) :: #{Key => [Value]}.
+-type bag(Key, Value) :: #{Key => sets:set(Value)}.
 -type result(Value)   :: {ok, Value} | {error, term()}.
 
 -spec main([string()]) -> no_return().
@@ -26,19 +26,18 @@ main(CmdArgs) ->
   Key   :: term(),
   Value :: term().
 append_bags(Bag1, Bag2) ->
-  Keys = sets:to_list(sets:from_list(maps:keys(Bag1) ++ maps:keys(Bag2))),
-  Append = fun (Key) -> {Key, maps:get(Key, Bag1, []) ++ maps:get(Key, Bag2, [])} end,
-  maps:from_list(lists:map(Append, Keys)).
+  Append = fun (Key, Set, Bag) -> sets:union(Set, maps:get(Key, Bag, sets:new())) end,
+  maps:fold(Append, Bag2, Bag1).
 
 -spec display_atoms(bag(atom(), location())) -> ok.
 display_atoms(Atoms) ->
   lists:foreach(fun (Atom) -> display_atom(Atom, maps:get(Atom, Atoms)) end,
                 lists:sort(maps:keys(Atoms))).
 
--spec display_atom(atom(), [location()]) -> ok.
+-spec display_atom(atom(), sets:set(location())) -> ok.
 display_atom(Atom, Locations) ->
   io:format("~p~n", [Atom]),
-  lists:foreach(fun display_location/1, lists:sort(Locations)),
+  lists:foreach(fun display_location/1, lists:sort(sets:to_list(Locations))),
   io:format("~n").
 
 -spec display_location(location()) -> ok.
@@ -71,8 +70,8 @@ atomize_file(FileName) ->
   Value :: term().
 to_bag(List) ->
   lists:foldl(fun ({Key, Value}, Bag) ->
-                Values = maps:get(Key, Bag, []),
-                maps:put(Key, [Value|Values], Bag)
+                Set = maps:get(Key, Bag, sets:new()),
+                maps:put(Key, sets:add_element(Value, Set), Bag)
               end, #{}, List).
 
 -spec atomize_form (erl_parse:abstract_form()) -> atoms();
