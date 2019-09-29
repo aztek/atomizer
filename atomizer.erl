@@ -262,21 +262,14 @@ atomize_type(Type) -> case Type of
 end.
 
 -spec atomize_function_type(FunctionType) -> atoms() when
-  FunctionType :: erl_parse:af_constrained_function_type()
-                | erl_parse:af_function_type().
+  FunctionType :: erl_parse:af_function_type()
+                | erl_parse:af_constrained_function_type().
 atomize_function_type(FunctionType) -> case FunctionType of
-  {type, _, bounded_fun, Ts} ->
-    lists:flatmap(fun (Tts) when is_list(Tts) -> lists:flatmap(fun atomize_constraint/1, Tts);
-                      (T) -> atomize_function_type(T)
-                  end, Ts);
-  {type, _, 'fun', Ps} ->
-    lists:flatmap(fun ({type, _, product, Ts}) -> lists:flatmap(fun atomize_type/1, Ts);
-                      (T) -> atomize_type(T)
-                  end, Ps)
+  {type, _, 'fun', Ps} -> lists:flatmap(fun atomize_type/1, Ps);
+  {type, _, bounded_fun, [T, Cs]} ->
+    atomize_function_type(T) ++ lists:flatmap(fun atomize_constraint/1, Cs)
 end.
 
 -spec atomize_constraint(erl_parse:af_constraint()) -> atoms().
 atomize_constraint({type, _, constraint, [{atom, _, is_subtype}, Ts]}) ->
-  lists:flatmap(fun ({var, _, _}) -> [];
-                    (T) -> atomize_type(T)
-                end, Ts).
+  lists:flatmap(fun atomize_type/1, Ts).
