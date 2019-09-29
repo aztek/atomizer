@@ -76,80 +76,95 @@ to_bag(List) ->
               end, #{}, List).
 
 -spec atomize_form(erl_parse:abstract_form() | erl_parse:form_info()) -> atoms().
-atomize_form({attribute, _, module,      _}) -> [];
-atomize_form({attribute, _, behavior,    _}) -> [];
-atomize_form({attribute, _, behaviour,   _}) -> [];
-atomize_form({attribute, _, export,      _}) -> [];
-atomize_form({attribute, _, import,      _}) -> [];
-atomize_form({attribute, _, export_type, _}) -> [];
-atomize_form({attribute, _, compile,     _}) -> [];
-atomize_form({attribute, _, file,        _}) -> [];
-atomize_form({attribute, _, record,   {_, Fs  }}) -> lists:flatmap(fun atomize_record_field_decl/1, Fs);
-atomize_form({attribute, _, type,     {_, T, _}}) -> atomize_type(T);
-atomize_form({attribute, _, opaque,   {_, T, _}}) -> atomize_type(T);
-atomize_form({attribute, _, callback, {_, Ts  }}) -> lists:flatmap(fun atomize_function_type/1, Ts);
-atomize_form({attribute, _, spec,     {_, Ts  }}) -> lists:flatmap(fun atomize_function_type/1, Ts);
-atomize_form({attribute, _, _,                _}) -> []; %% TODO: Should we parse custom module attributes?
-atomize_form({function,  _, _, _, Cs}) -> lists:flatmap(fun atomize_clause/1, Cs);
-atomize_form({eof, _}) -> [];
-atomize_form({error,   Info}) -> io:format("Error: ~w~n",   [Info]), [];
-atomize_form({warning, Info}) -> io:format("Warning: ~w~n", [Info]), [].
+atomize_form(Form) -> case Form of
+  {attribute, _, module,      _} -> [];
+  {attribute, _, behavior,    _} -> [];
+  {attribute, _, behaviour,   _} -> [];
+  {attribute, _, export,      _} -> [];
+  {attribute, _, import,      _} -> [];
+  {attribute, _, export_type, _} -> [];
+  {attribute, _, compile,     _} -> [];
+  {attribute, _, file,        _} -> [];
+  {attribute, _, record,   {_, Fs  }} -> lists:flatmap(fun atomize_record_field_decl/1, Fs);
+  {attribute, _, type,     {_, T, _}} -> atomize_type(T);
+  {attribute, _, opaque,   {_, T, _}} -> atomize_type(T);
+  {attribute, _, callback, {_, Ts  }} -> lists:flatmap(fun atomize_function_type/1, Ts);
+  {attribute, _, spec,     {_, Ts  }} -> lists:flatmap(fun atomize_function_type/1, Ts);
+  {attribute, _, _,                _} -> []; %% TODO: Should we parse custom module attributes?
+  {function,  _, _, _, Cs} -> lists:flatmap(fun atomize_clause/1, Cs);
+  {eof, _} -> [];
+  {error,   Info} -> io:format("Error: ~w~n",   [Info]), [];
+  {warning, Info} -> io:format("Warning: ~w~n", [Info]), []
+end.
 
 -spec atomize_expr(erl_parse:abstract_expr()) -> atoms().
-atomize_expr({atom,         L,        A}) -> [{A, L}];
-atomize_expr({char,         _,        _}) -> [];
-atomize_expr({float,        _,        _}) -> [];
-atomize_expr({integer,      _,        _}) -> [];
-atomize_expr({string,       _,        _}) -> [];
-atomize_expr({match,        _,     P, E}) -> atomize_pattern(P) ++ atomize_expr(E);
-atomize_expr({var,          _,        _}) -> [];
-atomize_expr({tuple,        _,       Es}) -> lists:flatmap(fun atomize_expr/1, Es);
-atomize_expr({nil,          _          }) -> [];
-atomize_expr({cons,         _,     H, T}) -> atomize_expr(H) ++ atomize_expr(T);
-atomize_expr({bin,          _,      BEs}) -> lists:flatmap(fun atomize_binelement/1, BEs);
-atomize_expr({op,           _, _,  A, B}) -> atomize_expr(A) ++ atomize_expr(B);
-atomize_expr({op,           _, _,     E}) -> atomize_expr(E);
-atomize_expr({record,       _,    _, Fs}) -> lists:flatmap(fun atomize_record_field/1, Fs);
-atomize_expr({record,       _, E, _, Fs}) -> atomize_expr(E) ++ lists:flatmap(fun atomize_record_field/1, Fs);
-atomize_expr({remote,       _, {atom, _, _}, {atom, _, _}}) -> [];
-atomize_expr({remote,       _, A, {atom, _, _}}) -> atomize_expr(A);
-atomize_expr({remote,       _, {atom, _, _}, B}) -> atomize_expr(B);
-atomize_expr({remote,       _,     A, B}) -> atomize_expr(A) ++ atomize_expr(B);
-atomize_expr({record_index, _,    _,  _}) -> [];
-atomize_expr({record_field, _, E, _,  _}) -> atomize_expr(E);
-atomize_expr({map,          _,       As}) -> lists:flatmap(fun atomize_assoc/1, As);
-atomize_expr({map,          _, E,    As}) -> atomize_expr(E) ++ lists:flatmap(fun atomize_assoc/1, As);
-atomize_expr({'catch',      _, E       }) -> atomize_expr(E);
-atomize_expr({call,         _, {atom, _, _}, Es}) -> lists:flatmap(fun atomize_expr/1, Es);
-atomize_expr({call,         _, E,    Es}) -> atomize_expr(E) ++ lists:flatmap(fun atomize_expr/1, Es);
-atomize_expr({lc,           _,    T, Qs}) -> atomize_expr(T) ++ lists:flatmap(fun atomize_qualifier/1, Qs);
-atomize_expr({bc,           _,    T, Qs}) -> atomize_expr(T) ++ lists:flatmap(fun atomize_qualifier/1, Qs);
-atomize_expr({block,        _,       Es}) -> lists:flatmap(fun atomize_expr/1, Es);
-atomize_expr({'if',         _,       Cs}) -> lists:flatmap(fun atomize_clause/1, Cs);
-atomize_expr({'case',       _,    E, Cs}) -> atomize_expr(E) ++ lists:flatmap(fun atomize_clause/1, Cs);
-atomize_expr({'try',        _, Es, Scs, Ccs, As}) -> lists:flatmap(fun atomize_expr/1, Es ++ As) ++ lists:flatmap(fun atomize_clause/1, Scs ++ Ccs);
-atomize_expr({'receive',    _, Cs       }) -> lists:flatmap(fun atomize_clause/1, Cs);
-atomize_expr({'receive',    _, Cs, E, Es}) -> lists:flatmap(fun atomize_clause/1, Cs) ++ atomize_expr(E) ++ lists:flatmap(fun atomize_expr/1, Es);
-atomize_expr({'fun',        _, {function, _, _}})    -> [];
-atomize_expr({'fun',        _, {function, _, _, _}}) -> [];
-atomize_expr({'fun',        _, {clauses, Cs}}) -> lists:flatmap(fun atomize_clause/1, Cs);
-atomize_expr({named_fun,    _, _, Cs}) -> lists:flatmap(fun atomize_clause/1, Cs).
+atomize_expr(Expr) -> case Expr of
+  {atom,      L,        A} -> [{A, L}];
+  {char,      _,        _} -> [];
+  {float,     _,        _} -> [];
+  {integer,   _,        _} -> [];
+  {string,    _,        _} -> [];
+  {match,     _,     P, E} -> atomize_pattern(P) ++ atomize_expr(E);
+  {var,       _,        _} -> [];
+  {tuple,     _,       Es} -> lists:flatmap(fun atomize_expr/1, Es);
+  {nil,       _          } -> [];
+  {cons,      _,     H, T} -> atomize_expr(H) ++ atomize_expr(T);
+  {bin,       _,      BEs} -> lists:flatmap(fun atomize_binelement/1, BEs);
+  {op,        _, _,  A, B} -> atomize_expr(A) ++ atomize_expr(B);
+  {op,        _, _,     E} -> atomize_expr(E);
+  {record,    _,    _, Fs} -> lists:flatmap(fun atomize_record_field/1, Fs);
+  {record,    _, E, _, Fs} -> atomize_expr(E) ++ lists:flatmap(fun atomize_record_field/1, Fs);
+  {remote,    _, {atom, _, _}, {atom, _, _}} -> [];
+  {remote,    _, A, {atom, _, _}} -> atomize_expr(A);
+  {remote,    _, {atom, _, _}, B} -> atomize_expr(B);
+  {remote,    _,     A, B} -> atomize_expr(A) ++ atomize_expr(B);
+  {record_index, _,    _,  _} -> [];
+  {record_field, _, E, _,  _} -> atomize_expr(E);
+  {map,       _,       As} -> lists:flatmap(fun atomize_assoc/1, As);
+  {map,       _, E,    As} -> atomize_expr(E) ++ lists:flatmap(fun atomize_assoc/1, As);
+  {'catch',   _, E       } -> atomize_expr(E);
+  {call,      _, {atom, _, _}, Es} -> lists:flatmap(fun atomize_expr/1, Es);
+  {call,      _, E,    Es} -> atomize_expr(E) ++ lists:flatmap(fun atomize_expr/1, Es);
+  {lc,        _,    T, Qs} -> atomize_expr(T) ++ lists:flatmap(fun atomize_qualifier/1, Qs);
+  {bc,        _,    T, Qs} -> atomize_expr(T) ++ lists:flatmap(fun atomize_qualifier/1, Qs);
+  {block,     _,       Es} -> lists:flatmap(fun atomize_expr/1, Es);
+  {'if',      _,       Cs} -> lists:flatmap(fun atomize_clause/1, Cs);
+  {'case',    _,    E, Cs} -> atomize_expr(E) ++ lists:flatmap(fun atomize_clause/1, Cs);
+  {'try',     _, Es, Scs, Ccs, As} -> lists:flatmap(fun atomize_expr/1, Es ++ As)
+                                   ++ lists:flatmap(fun atomize_clause/1, Scs ++ Ccs);
+  {'receive', _, Cs       } -> lists:flatmap(fun atomize_clause/1, Cs);
+  {'receive', _, Cs, E, Es} -> lists:flatmap(fun atomize_clause/1, Cs)
+                           ++ atomize_expr(E)
+                           ++ lists:flatmap(fun atomize_expr/1, Es);
+  {'fun',     _, {function, _, _}}    -> [];
+  {'fun',     _, {function, _, _, _}} -> [];
+  {'fun',     _, {clauses, Cs}} -> lists:flatmap(fun atomize_clause/1, Cs);
+  {named_fun, _, _, Cs} -> lists:flatmap(fun atomize_clause/1, Cs)
+end.
 
 -spec atomize_binelement(erl_parse:af_binelement(erl_parse:abstract_expr())) -> atoms().
-atomize_binelement({bin_element, _, E, default, _}) -> atomize_expr(E);
-atomize_binelement({bin_element, _, E, S,       _}) -> atomize_expr(E) ++ atomize_expr(S).
+atomize_binelement(BinElement) -> case BinElement of
+  {bin_element, _, E, default, _} -> atomize_expr(E);
+  {bin_element, _, E, S,       _} -> atomize_expr(E) ++ atomize_expr(S)
+end.
 
 -spec atomize_binelement_pattern(erl_parse:af_binelement(erl_parse:af_pattern())) -> atoms().
-atomize_binelement_pattern({bin_element, _, E, default, _}) -> atomize_pattern(E);
-atomize_binelement_pattern({bin_element, _, E, S,       _}) -> atomize_pattern(E) ++ atomize_pattern(S).
+atomize_binelement_pattern(BinElement) -> case BinElement of
+  {bin_element, _, E, default, _} -> atomize_pattern(E);
+  {bin_element, _, E, S,       _} -> atomize_pattern(E) ++ atomize_pattern(S)
+end.
 
 -spec atomize_record_field_decl(erl_parse:af_field_decl()) -> atoms().
-atomize_record_field_decl({typed_record_field, F, T}) -> atomize_record_field(F) ++ atomize_type(T);
-atomize_record_field_decl(F) -> atomize_record_field(F).
+atomize_record_field_decl(FieldDecl) -> case FieldDecl of
+  {typed_record_field, F, T} -> atomize_record_field(F) ++ atomize_type(T);
+  F -> atomize_record_field(F)
+end.
 
 -spec atomize_record_field(erl_parse:af_field()) -> atoms().
-atomize_record_field({record_field, _, _})    -> [];
-atomize_record_field({record_field, _, _, E}) -> atomize_expr(E).
+atomize_record_field(Field) -> case Field of
+  {record_field, _, _}    -> [];
+  {record_field, _, _, E} -> atomize_expr(E)
+end.
 
 -spec atomize_clause(erl_parse:af_clause()) -> atoms().
 atomize_clause({clause, _, Ps, Gs, Es}) ->
@@ -158,91 +173,103 @@ atomize_clause({clause, _, Ps, Gs, Es}) ->
   lists:flatmap(fun atomize_expr/1, Es).
 
 -spec atomize_pattern(erl_parse:af_pattern()) -> atoms().
-atomize_pattern({atom,         L,         A}) -> [{A, L}];
-atomize_pattern({char,         _,         _}) -> [];
-atomize_pattern({float,        _,         _}) -> [];
-atomize_pattern({integer,      _,         _}) -> [];
-atomize_pattern({string,       _,         _}) -> [];
-atomize_pattern({match,        _,    P1, P2}) -> atomize_pattern(P1) ++ atomize_pattern(P2);
-atomize_pattern({var,          _,         _}) -> [];
-atomize_pattern({tuple,        _,        Ps}) -> lists:flatmap(fun atomize_pattern/1, Ps);
-atomize_pattern({nil,          _           }) -> [];
-atomize_pattern({cons,         _,    P1, P2}) -> atomize_pattern(P1) ++ atomize_pattern(P2);
-atomize_pattern({bin,          _,        Bs}) -> lists:flatmap(fun atomize_binelement_pattern/1, Bs);
-atomize_pattern({op,           _, _, P1, P2}) -> atomize_pattern(P1) ++ atomize_pattern(P2);
-atomize_pattern({op,           _, _,      P}) -> atomize_pattern(P);
-atomize_pattern({record,       _,     _, Fs}) -> lists:flatmap(fun atomize_record_field/1, Fs);
-atomize_pattern({record_index, _,      _, _}) -> [];
-atomize_pattern({map,          _,        As}) -> lists:flatmap(fun atomize_assoc/1, As).
+atomize_pattern(Pattern) -> case Pattern of
+  {atom,    L,         A} -> [{A, L}];
+  {char,    _,         _} -> [];
+  {float,   _,         _} -> [];
+  {integer, _,         _} -> [];
+  {string,  _,         _} -> [];
+  {match,   _,    P1, P2} -> atomize_pattern(P1) ++ atomize_pattern(P2);
+  {var,     _,         _} -> [];
+  {tuple,   _,        Ps} -> lists:flatmap(fun atomize_pattern/1, Ps);
+  {nil,     _           } -> [];
+  {cons,    _,    P1, P2} -> atomize_pattern(P1) ++ atomize_pattern(P2);
+  {bin,     _,        Bs} -> lists:flatmap(fun atomize_binelement_pattern/1, Bs);
+  {op,      _, _, P1, P2} -> atomize_pattern(P1) ++ atomize_pattern(P2);
+  {op,      _, _,      P} -> atomize_pattern(P);
+  {map,     _,        As} -> lists:flatmap(fun atomize_assoc/1, As);
+  {record,  _,     _, Fs} -> lists:flatmap(fun atomize_record_field/1, Fs);
+  {record_index, _, _, _} -> []
+end.
 
 -spec atomize_guard(erl_parse:af_guard_test()) -> atoms().
-atomize_guard({atom,         L,         A}) -> [{A, L}];
-atomize_guard({char,         _,         _}) -> [];
-atomize_guard({float,        _,         _}) -> [];
-atomize_guard({integer,      _,         _}) -> [];
-atomize_guard({string,       _,         _}) -> [];
-atomize_guard({var,          _,         _}) -> [];
-atomize_guard({tuple,        _,        Gs}) -> lists:flatmap(fun atomize_guard/1, Gs);
-atomize_guard({nil,          _           }) -> [];
-atomize_guard({cons,         _,    G1, G2}) -> atomize_guard(G1) ++ atomize_guard(G2);
-atomize_guard({bin,          _,       BEs}) -> lists:flatmap(fun atomize_binelement/1, BEs);
-atomize_guard({op,           _, _, G1, G2}) -> atomize_guard(G1) ++ atomize_guard(G2);
-atomize_guard({op,           _, _,      G}) -> atomize_guard(G);
-atomize_guard({record,       _,     _, Fs}) -> lists:flatmap(fun atomize_record_field_guard/1, Fs);
-atomize_guard({record_index, _,      _, _}) -> [];
-atomize_guard({record_field, _,   G, _, _}) -> atomize_guard(G);
-atomize_guard({map,          _,        As}) -> lists:flatmap(fun atomize_assoc/1, As);
-atomize_guard({map,          _,     G, As}) -> atomize_guard(G) ++ lists:flatmap(fun atomize_assoc/1, As);
-atomize_guard({call,         _,     _, Gs}) -> lists:flatmap(fun atomize_guard/1, Gs).
+atomize_guard(Guard) -> case Guard of
+  {atom,    L,         A} -> [{A, L}];
+  {char,    _,         _} -> [];
+  {float,   _,         _} -> [];
+  {integer, _,         _} -> [];
+  {string,  _,         _} -> [];
+  {var,     _,         _} -> [];
+  {tuple,   _,        Gs} -> lists:flatmap(fun atomize_guard/1, Gs);
+  {nil,     _           } -> [];
+  {cons,    _,    G1, G2} -> atomize_guard(G1) ++ atomize_guard(G2);
+  {bin,     _,       BEs} -> lists:flatmap(fun atomize_binelement/1, BEs);
+  {op,      _, _, G1, G2} -> atomize_guard(G1) ++ atomize_guard(G2);
+  {op,      _, _,      G} -> atomize_guard(G);
+  {record,  _,     _, Fs} -> lists:flatmap(fun atomize_record_field_guard/1, Fs);
+  {map,     _,        As} -> lists:flatmap(fun atomize_assoc/1, As);
+  {map,     _,     G, As} -> atomize_guard(G) ++ lists:flatmap(fun atomize_assoc/1, As);
+  {call,    _,     _, Gs} -> lists:flatmap(fun atomize_guard/1, Gs);
+  {record_index, _,    _, _} -> [];
+  {record_field, _, G, _, _} -> atomize_guard(G)
+end.
 
 -spec atomize_record_field_guard(erl_parse:af_record_field(erl_parse:af_guard_test())) -> atoms().
 atomize_record_field_guard({record_field, _, _, G}) -> atomize_guard(G).
 
 -spec atomize_assoc(erl_parse:af_assoc(erl_parse:abstract_expr())) -> atoms().
-atomize_assoc({map_field_assoc, _, K, V}) -> atomize_expr(K) ++ atomize_expr(V);
-atomize_assoc({map_field_exact, _, K, V}) -> atomize_expr(K) ++ atomize_expr(V).
+atomize_assoc(Assoc) -> case Assoc of
+  {map_field_assoc, _, K, V} -> atomize_expr(K) ++ atomize_expr(V);
+  {map_field_exact, _, K, V} -> atomize_expr(K) ++ atomize_expr(V)
+end.
 
 -spec atomize_qualifier(erl_parse:af_qualifier()) -> atoms().
-atomize_qualifier({generate,   _, P, E}) -> atomize_pattern(P) ++ atomize_expr(E);
-atomize_qualifier({b_generate, _, P, E}) -> atomize_pattern(P) ++ atomize_expr(E);
-atomize_qualifier(E) -> atomize_expr(E).
+atomize_qualifier(Qualifier) -> case Qualifier of
+  {generate,   _, P, E} -> atomize_pattern(P) ++ atomize_expr(E);
+  {b_generate, _, P, E} -> atomize_pattern(P) ++ atomize_expr(E);
+  E -> atomize_expr(E)
+end.
 
 -spec atomize_type(erl_parse:abstract_type()) -> atoms().
-atomize_type({type, _, any})                 -> [];
-atomize_type({type, _, binary,           _}) -> [];
-atomize_type({type, _, nil,              _}) -> [];
-atomize_type({type, _, 'fun',           Ts}) -> lists:flatmap(fun atomize_type/1, Ts);
-atomize_type({type, _, product,         Ts}) -> lists:flatmap(fun atomize_type/1, Ts);
-atomize_type({type, _, range,            _}) -> [];
-atomize_type({type, _, map,            any}) -> [];
-atomize_type({type, _, map_field_assoc, Ts}) -> lists:flatmap(fun atomize_type/1, Ts);
-atomize_type({type, _, map_field_exact, Ts}) -> lists:flatmap(fun atomize_type/1, Ts);
-atomize_type({type, _, record,           _}) -> [];
-atomize_type({type, _, field_type,       _}) -> [];
-atomize_type({type, _, tuple,          any}) -> [];
-atomize_type({type, _, tuple,           Ts}) -> lists:flatmap(fun atomize_type/1, Ts);
-atomize_type({type, _, union,           Ts}) -> lists:flatmap(fun atomize_type/1, Ts);
-atomize_type({type, _, _,               Ts}) -> lists:flatmap(fun atomize_type/1, Ts);
-atomize_type({ann_type,    _,           Ts}) -> lists:flatmap(fun atomize_type/1, Ts);
-atomize_type({remote_type, _,            _}) -> [];
-atomize_type({atom,        L,            A}) -> [{A, L}];
-atomize_type({char,        _,            _}) -> [];
-atomize_type({integer,     _,            _}) -> [];
-atomize_type({op,          _,         _, _}) -> [];
-atomize_type({op,          _,      _, _, _}) -> [];
-atomize_type({var,         _,            _}) -> [];
-atomize_type({user_type,   _,        _, Ts}) -> lists:flatmap(fun atomize_type/1, Ts).
+atomize_type(Type) -> case Type of
+  {type, _, any}                 -> [];
+  {type, _, binary,           _} -> [];
+  {type, _, nil,              _} -> [];
+  {type, _, 'fun',           Ts} -> lists:flatmap(fun atomize_type/1, Ts);
+  {type, _, product,         Ts} -> lists:flatmap(fun atomize_type/1, Ts);
+  {type, _, range,            _} -> [];
+  {type, _, map,            any} -> [];
+  {type, _, map_field_assoc, Ts} -> lists:flatmap(fun atomize_type/1, Ts);
+  {type, _, map_field_exact, Ts} -> lists:flatmap(fun atomize_type/1, Ts);
+  {type, _, record,           _} -> [];
+  {type, _, field_type,       _} -> [];
+  {type, _, tuple,          any} -> [];
+  {type, _, tuple,           Ts} -> lists:flatmap(fun atomize_type/1, Ts);
+  {type, _, union,           Ts} -> lists:flatmap(fun atomize_type/1, Ts);
+  {type, _, _,               Ts} -> lists:flatmap(fun atomize_type/1, Ts);
+  {ann_type,    _,           Ts} -> lists:flatmap(fun atomize_type/1, Ts);
+  {remote_type, _,            _} -> [];
+  {atom,        L,            A} -> [{A, L}];
+  {char,        _,            _} -> [];
+  {integer,     _,            _} -> [];
+  {op,          _,         _, _} -> [];
+  {op,          _,      _, _, _} -> [];
+  {var,         _,            _} -> [];
+  {user_type,   _,        _, Ts} -> lists:flatmap(fun atomize_type/1, Ts)
+end.
 
 -spec atomize_function_type(FunctionType) -> atoms() when
   FunctionType :: erl_parse:af_constrained_function_type() | erl_parse:af_function_type().
-atomize_function_type({type, _, bounded_fun, Ts}) ->
-  lists:flatmap(fun (Tts) when is_list(Tts) -> lists:flatmap(fun atomize_constraint/1, Tts);
-                    (T) -> atomize_function_type(T)
-                end, Ts);
-atomize_function_type({type, _, 'fun', Ps}) ->
-  lists:flatmap(fun ({type, _, product, Ts}) -> lists:flatmap(fun atomize_type/1, Ts);
-                    (T) -> atomize_type(T)
-                end, Ps).
+atomize_function_type(FunctionType) -> case FunctionType of
+  {type, _, bounded_fun, Ts} ->
+    lists:flatmap(fun (Tts) when is_list(Tts) -> lists:flatmap(fun atomize_constraint/1, Tts);
+                      (T) -> atomize_function_type(T)
+                  end, Ts);
+  {type, _, 'fun', Ps} ->
+    lists:flatmap(fun ({type, _, product, Ts}) -> lists:flatmap(fun atomize_type/1, Ts);
+                      (T) -> atomize_type(T)
+                  end, Ps)
+end.
 
 -spec atomize_constraint(erl_parse:af_constraint()) -> atoms().
 atomize_constraint({type, _, constraint, [{atom, _, is_subtype}, Ts]}) ->
