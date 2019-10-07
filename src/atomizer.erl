@@ -1,79 +1,38 @@
-#!/usr/bin/env escript
-
 -module(atomizer).
 
--mode(compile).
-
--export([main/1]).
+-export_type([atoms/0, location/0, result/1]).
 
 -type atoms()         :: [{atom(), Line :: pos_integer()}].
 -type location()      :: {file:filename(), Line :: pos_integer()}.
--type bag(Key, Value) :: #{Key => sets:set(Value)}.
 -type result(Value)   :: {ok, Value} | {error, term()}.
 
--spec main([string()]) -> no_return().
-main(CmdArgs) ->
-  case atomize_files(CmdArgs) of
-    {ok, Atoms} ->
-      display_atoms(Atoms),
-      erlang:halt(0, [{flush, true}]);
-    {error, Error} ->
-      io:format(standard_error, "Error: ~s~n", [Error]),
-      erlang:halt(1, [{flush, true}])
-  end.
+-export([
+  atomize_files/1,
+  atomize_file/1
+]).
 
--spec append_bags(bag(Key, Value), bag(Key, Value)) -> bag(Key, Value) when
-  Key   :: term(),
-  Value :: term().
-append_bags(Bag1, Bag2) ->
-  maps:fold(fun (Key, Set, Bag) ->
-    maps:update_with(Key, fun (Set1) -> sets:union(Set, Set1) end, Set, Bag)
-  end, Bag2, Bag1).
-
--spec display_atoms(bag(atom(), location())) -> ok.
-display_atoms(Atoms) ->
-  lists:foreach(fun (Atom) -> display_atom(Atom, maps:get(Atom, Atoms)) end,
-                lists:sort(maps:keys(Atoms))).
-
--spec display_atom(atom(), sets:set(location())) -> ok.
-display_atom(Atom, Locations) ->
-  io:format("~p~n", [Atom]),
-  lists:foreach(fun display_location/1, lists:sort(sets:to_list(Locations))),
-  io:format("~n").
-
--spec display_location(location()) -> ok.
-display_location({F, L}) -> io:format("~s:~p~n", [filename:absname(F), L]).
-
--spec atomize_files([file:filename()]) -> result(bag(atom(), location())).
+-spec atomize_files([file:filename()]) -> result(bags:bag(atom(), location())).
 atomize_files(FileNames) ->
   lists:foldl(fun (FileName, {ok, Bag}) ->
                     case atomize_file(FileName) of
-                      {ok, Bag1} -> {ok, append_bags(Bag, Bag1)};
+                      {ok, Bag1} -> {ok, bags:append_bags(Bag, Bag1)};
                       Error -> Error
                     end;
                   (_, Error) -> Error
-              end, {ok, #{}}, FileNames).
+              end, {ok, bags:empty()}, FileNames).
 
--spec atomize_file(file:filename()) -> result(bag(atom(), location())).
+-spec atomize_file(file:filename()) -> result(bags:bag(atom(), location())).
 atomize_file(FileName) ->
   Atomize = fun (Forms) ->
     Atoms = lists:flatmap(fun atomize_form/1, Forms),
-    to_bag(lists:map(fun ({Atom, Line}) -> {Atom, {FileName, Line}} end, Atoms))
+    AppendFileName = fun ({Atom, Line}) -> {Atom, {FileName, Line}} end,
+    bags:from_list(lists:map(AppendFileName, Atoms))
   end,
   case epp:parse_file(FileName, []) of
     {ok, Forms}    -> {ok, Atomize(Forms)};
     {ok, Forms, _} -> {ok, Atomize(Forms)};
     {error, Error} -> {error, Error}
   end.
-
--spec to_bag([{Key, Value}]) -> bag(Key, Value) when
-  Key   :: term(),
-  Value :: term().
-to_bag(List) ->
-  lists:foldl(fun ({Key, Value}, Bag) ->
-                Set = maps:get(Key, Bag, sets:new()),
-                maps:put(Key, sets:add_element(Value, Set), Bag)
-              end, #{}, List).
 
 -spec atomize_form (erl_parse:abstract_form()) -> atoms();
                    (erl_parse:form_info())     -> [].
