@@ -4,7 +4,7 @@
 
 -opaque bag(Key, Value) :: #{Key => sets:set(Value)}.
 
--export([empty/0, from_list/1, append_bags/2]).
+-export([empty/0, from_list/1, put/3, append_bags/2]).
 
 -spec empty() -> bag(Key :: term(), Value :: term()).
 empty() -> #{}.
@@ -13,10 +13,15 @@ empty() -> #{}.
   Key   :: term(),
   Value :: term().
 from_list(List) ->
-  lists:foldl(fun ({Key, Value}, Bag) ->
-    Set = maps:get(Key, Bag, sets:new()),
-    maps:put(Key, sets:add_element(Value, Set), Bag)
-  end, #{}, List).
+  lists:foldl(fun ({Key, Value}, Bag) -> put(Key, Value, Bag) end,
+              empty(), List).
+
+-spec put(Key, Value, bag(Key, Value)) -> bag(Key, Value) when
+  Key :: term(),
+  Value :: term().
+put(Key, Value, Bag) ->
+  Set = maps:get(Key, Bag, sets:new()),
+  maps:put(Key, sets:add_element(Value, Set), Bag).
 
 -spec append_bags(bag(Key, Value), bag(Key, Value)) -> bag(Key, Value) when
   Key   :: term(),
