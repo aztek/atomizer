@@ -16,14 +16,17 @@ atomize_files(FileNames) ->
   lists:foreach(fun (FileName) ->
                   spawn_link(?MODULE, atomize_file, [FileName, Pid])
                 end, FileNames),
-  atomize_loop(length(FileNames), bags:empty()).
+  atomize_loop(sets:from_list(FileNames), bags:empty()).
 
-atomize_loop(0, Atoms) -> {ok, Atoms};
-atomize_loop(N, Atoms) ->
-  receive
-    {atom, A, F, L} -> atomize_loop(N, bags:put(A, {F, L}, Atoms));
-    done -> atomize_loop(N - 1, Atoms);
-    {error, Error} -> {error, Error}
+atomize_loop(FileNames, Atoms) ->
+  case sets:is_empty(FileNames) of
+    true  -> {ok, Atoms};
+    false ->
+      receive
+        {atom, A, F, L}  -> atomize_loop(FileNames, bags:put(A, {F, L}, Atoms));
+        {done, FileName} -> atomize_loop(sets:del_element(FileName, FileNames), Atoms);
+        {error, Error}   -> {error, Error}
+      end
   end.
 
 -spec atomize_file(file:filename(), pid()) -> ok.
@@ -31,8 +34,8 @@ atomize_file(FileName, Callback) ->
   put(filename, FileName),
   put(callback, Callback),
   Callback ! case epp:parse_file(FileName, []) of
-    {ok, Forms}    -> lists:foreach(fun atomize_form/1, Forms), done;
-    {ok, Forms, _} -> lists:foreach(fun atomize_form/1, Forms), done;
+    {ok, Forms}    -> lists:foreach(fun atomize_form/1, Forms), {done, FileName};
+    {ok, Forms, _} -> lists:foreach(fun atomize_form/1, Forms), {done, FileName};
     {error, Error} -> {error, Error}
   end,
   ok.
