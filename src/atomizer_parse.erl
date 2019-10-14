@@ -8,21 +8,33 @@
 parse_file(Callback, FileName) ->
     put(filename, FileName),
     put(callback, Callback),
-    case epp:parse_file(FileName, []) of
-        {ok, Forms} ->
-            lists:foreach(fun parse_form/1, Forms),
+    case epp:open(FileName, []) of
+        {ok, Epp} ->
+            parse_epp(Epp),
             Callback ! {done_parsing_file, FileName};
-
-        {ok, Forms, _} ->
-            lists:foreach(fun parse_form/1, Forms),
-            Callback ! {done_parsing_file, FileName};
-
         {error, Error} ->
             Callback ! {error, Error}
     end,
     ok.
 
--spec parse_form(erl_parse:abstract_form() | erl_parse:form_info()) -> ok.
+parse_epp(Epp) ->
+    case epp:parse_erl_form(Epp) of
+        {ok, Form} ->
+            parse_form(Form),
+            parse_epp(Epp);
+
+        {eof, _} -> ok;
+
+        {warning, Info} ->
+            io:format("Warning: [~s] ~w~n", [get(filename), Info]),
+            parse_epp(Epp);
+
+        {error, Info} ->
+            io:format("Error: [~s] ~w~n", [get(filename), Info]),
+            parse_epp(Epp)
+    end.
+
+-spec parse_form(erl_parse:abstract_form()) -> ok.
 parse_form(Form) -> case Form of
     {attribute, _, module,      _} -> ok;
     {attribute, _, behavior,    _} -> ok;
@@ -38,10 +50,7 @@ parse_form(Form) -> case Form of
     {attribute, _, callback, {_, Ts  }} -> lists:foreach(fun parse_function_type/1, Ts);
     {attribute, _, spec,     {_, Ts  }} -> lists:foreach(fun parse_function_type/1, Ts);
     {attribute, _, _,                _} -> ok; %% TODO: Should we parse custom module attributes?
-    {function,  _, _, _, Cs} -> lists:foreach(fun parse_clause/1, Cs);
-    {eof, _} -> ok;
-    {error,   Info} -> io:format("Error: ~w~n",   [Info]), [];
-    {warning, Info} -> io:format("Warning: ~w~n", [Info]), []
+    {function,  _, _, _, Cs} -> lists:foreach(fun parse_clause/1, Cs)
 end.
 
 -spec parse_expr(erl_parse:abstract_expr()) -> ok.
