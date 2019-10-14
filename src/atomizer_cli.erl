@@ -30,14 +30,14 @@ show(Source) ->
         {error, Error} -> io:format(standard_error, "Error: ~s~n", [Error])
     end.
 
--spec list_atoms(bags:bag(atom(), atomizer:location())) -> ok.
+-spec list_atoms(multimaps:multimap(atom(), atomizer:location())) -> ok.
 list_atoms(Atoms) ->
     case lists:sort(maps:keys(Atoms)) of
         []   -> io:format("No atoms~n", []);
         Keys -> lists:foreach(fun (Atom) -> io:format("~p~n", [Atom]) end, Keys)
     end.
 
--spec show_atoms(bags:bag(atom(), atomizer:location())) -> ok.
+-spec show_atoms(multimaps:multimap(atom(), atomizer:location())) -> ok.
 show_atoms(Atoms) ->
     lists:foreach(fun (Atom) -> show_atom(Atom, maps:get(Atom, Atoms)) end,
                   lists:sort(maps:keys(Atoms))).

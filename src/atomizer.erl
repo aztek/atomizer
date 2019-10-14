@@ -15,7 +15,7 @@
 
 -export([atomize/1]).
 
--spec atomize(source()) -> {ok, bags:bag(atom(), location())} | {error, term()}.
+-spec atomize(source()) -> {ok, multimaps:multimap(atom(), location())} | {error, term()}.
 atomize(Source) ->
     Pid = self(),
     Callback = spawn_link(fun () -> init(Pid) end),
@@ -26,9 +26,9 @@ atomize(Source) ->
     end.
 
 -record(state, {
-    expect_files = true         :: boolean(),
-    file_names   = sets:new()   :: sets:set(file:filename()),
-    atoms        = bags:empty() :: bags:bag(atom(), location())
+    expect_files = true :: boolean(),
+    file_names = sets:new() :: sets:set(file:filename()),
+    atoms = multimaps:empty() :: multimaps:multimap(atom(), location())
 }).
 
 -spec init(pid()) -> ok.
@@ -54,7 +54,7 @@ loop(State) ->
                     loop(State#state{file_names = sets:add_element(FileName, FileNames)});
 
                 {atom, Atom, FileName, Location} ->
-                    loop(State#state{atoms = bags:put(Atom, {FileName, Location}, Atoms)});
+                    loop(State#state{atoms = multimaps:put(Atom, {FileName, Location}, Atoms)});
 
                 {done_parsing_file, FileName} ->
                     loop(State#state{file_names = sets:del_element(FileName, FileNames)});
