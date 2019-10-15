@@ -2,9 +2,10 @@
 
 -include_lib("kernel/include/file.hrl").
 
--define(ERLANG_EXTENSIONS, [".erl", ".hrl", ".yrl"]).
+-define(OPEN_FILE_LIMIT, 10).
+-define(ERLANG_EXTENSIONS, [".erl", ".hrl"]).
 
--export_type([location/0, result/1]).
+-export_type([location/0]).
 
 -type source() :: {file, file:filename()}
                 | {dir,  file:filename()}
@@ -27,7 +28,8 @@ atomize(Source) ->
 
 -record(state, {
     expect_files = true :: boolean(),
-    file_names = sets:new() :: sets:set(file:filename()),
+    file_pool = sets:new() :: sets:set(file:filename()),
+    file_queue = queue:new() :: queue:queue(file:filename()),
     atoms = multimaps:empty() :: multimaps:multimap(atom(), location())
 }).
 
@@ -40,24 +42,38 @@ init(Callback) ->
 loop(State) ->
     #state{
         expect_files = ExpectFiles,
-        file_names   = FileNames,
+        file_pool    = FilePool,
+        file_queue   = FileQueue,
         atoms        = Atoms
     } = State,
-    case sets:is_empty(FileNames) and (ExpectFiles == false) of
+    case sets:is_empty(FilePool) and queue:is_empty(FileQueue) and (ExpectFiles == false) of
         true ->
             get(callback) ! {ok, Atoms},
             ok;
         false ->
+            FilesInProgress = sets:size(FilePool),
             receive
+                {file, FileName} when FilesInProgress >= ?OPEN_FILE_LIMIT ->
+                    loop(State#state{file_queue = queue:in(FileName, FileQueue)});
+
                 {file, FileName} ->
                     spawn_link(atomizer_parse, parse_file, [self(), FileName]),
-                    loop(State#state{file_names = sets:add_element(FileName, FileNames)});
+                    loop(State#state{file_pool = sets:add_element(FileName, FilePool)});
 
                 {atom, Atom, FileName, Location} ->
                     loop(State#state{atoms = multimaps:put(Atom, {FileName, Location}, Atoms)});
 
+                {done_parsing_file, FileName} when FilesInProgress > ?OPEN_FILE_LIMIT ->
+                    case queue:out(FileQueue) of
+                        {{value, FileName1}, Queue} ->
+                            spawn_link(atomizer_parse, parse_file, [self(), FileName1]),
+                            loop(State#state{file_queue = Queue, file_pool = sets:del_element(FileName, FilePool)});
+                        {empty, _} ->
+                            loop(State#state{file_pool = sets:del_element(FileName, FilePool)})
+                    end;
+
                 {done_parsing_file, FileName} ->
-                    loop(State#state{file_names = sets:del_element(FileName, FileNames)});
+                    loop(State#state{file_pool = sets:del_element(FileName, FilePool)});
 
                 done_collecting_files ->
                     loop(State#state{expect_files = false});
@@ -86,7 +102,7 @@ collect_files(Callback, {dirs, Dirs}) ->
     lists:foreach(fun (Dir) -> collect_files(Callback, {dir, Dir}) end, Dirs),
     ok.
 
--spec list_dir(Dir) -> {Files :: [file:filename()], Dirs :: [file:filename()]}.
+-spec list_dir(Dir :: file:filename()) -> {Files :: [file:filename()], Dirs :: [file:filename()]}.
 list_dir(Dir) ->
     {ok, Names} = file:list_dir(Dir),
     lists:foldl(fun (Name, {Files, Dirs}) ->
