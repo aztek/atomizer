@@ -2,20 +2,54 @@
 
 -include_lib("kernel/include/file.hrl").
 
--export([parse_file/2]).
+-define(ERLANG_EXTENSIONS, [".erl", ".hrl"]).
 
--spec parse_file(pid(), file:filename()) -> ok.
-parse_file(Callback, FileName) ->
-    put(filename, FileName),
+-export_type([path/0]).
+
+-type path() :: {erl, file:filename()}
+              | {dir, file:filename()}.
+
+-export([parse_path/2]).
+
+-spec parse_path(Callback :: pid(), path()) -> any().
+parse_path(Callback, {erl, File}) ->
+    put(filename, File),
     put(callback, Callback),
-    case epp:open(FileName, []) of
+    case epp:open(File, []) of
         {ok, Epp} ->
             parse_epp(Epp),
-            Callback ! {done_parsing_file, FileName};
+            Callback ! {done_path, {erl, File}};
+
         {error, Error} ->
-            Callback ! {error, Error}
-    end,
-    ok.
+            Callback ! {error, {Error, File}}
+    end;
+
+parse_path(Callback, {dir, Dir}) ->
+    case file:list_dir(Dir) of
+        {ok, Names} ->
+            lists:foreach(fun (Name) ->
+                Path = Dir ++ "/" ++ Name,
+                {ok, Info} = file:read_file_info(Path),
+                case Info#file_info.type of
+                    directory ->
+                        Callback ! {add_path, {dir, Path}};
+                    regular ->
+                        case is_erlang(Name) of
+                            true  -> Callback ! {add_path, {erl, Path}};
+                            false -> ignore
+                        end;
+                    _ -> ignore
+                end
+                          end, Names),
+            Callback ! {done_path, {dir, Dir}};
+
+        {error, Error} ->
+            Callback ! {error, {Error, Dir}}
+    end.
+
+-spec is_erlang(file:filename()) -> boolean().
+is_erlang(FileName) ->
+    lists:any(fun (Ext) -> lists:suffix(Ext, FileName) end, ?ERLANG_EXTENSIONS).
 
 parse_epp(Epp) ->
     case epp:parse_erl_form(Epp) of
@@ -26,11 +60,11 @@ parse_epp(Epp) ->
         {eof, _} -> ok;
 
         {warning, Info} ->
-            io:format("Warning: [~s] ~w~n", [get(filename), Info]),
+            io:format("Warning [~p]: ~w~n", [get(filename), Info]),
             parse_epp(Epp);
 
         {error, Info} ->
-            io:format("Error: [~s] ~w~n", [get(filename), Info]),
+            io:format("Error [~p]: ~w~n", [get(filename), Info]),
             parse_epp(Epp)
     end.
 

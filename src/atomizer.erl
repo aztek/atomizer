@@ -3,7 +3,6 @@
 -include_lib("kernel/include/file.hrl").
 
 -define(OPEN_FILE_LIMIT, 10).
--define(ERLANG_EXTENSIONS, [".erl", ".hrl"]).
 
 -export_type([location/0]).
 
@@ -18,106 +17,40 @@
 
 -spec atomize(source()) -> {ok, multimaps:multimap(atom(), location())} | {error, term()}.
 atomize(Source) ->
-    Pid = self(),
-    Callback = spawn_link(fun () -> init(Pid) end),
-    ok = collect_files(Callback, Source),
-    Callback ! done_collecting_files,
-    receive
-        Msg -> Msg
-    end.
+    Queue = case Source of
+                {file,  File}  -> [{erl, File}];
+                {dir,   Dir}   -> [{dir, Dir}];
+                {files, Files} -> lists:map(fun (File) -> {erl, File} end, Files);
+                {dirs,  Dirs}  -> lists:map(fun (Dir)  -> {dir, Dir}  end, Dirs)
+            end,
+    loop(sets:new(), queue:from_list(Queue), multimaps:empty()).
 
--record(state, {
-    expect_files = true :: boolean(),
-    file_pool = sets:new() :: sets:set(file:filename()),
-    file_queue = queue:new() :: queue:queue(file:filename()),
-    atoms = multimaps:empty() :: multimaps:multimap(atom(), location())
-}).
+-spec loop(Pool, Queue, Atoms) -> {ok, Atoms} | {error, term()} when
+    Pool  :: sets:set(atomizer_parse:path()),
+    Queue :: queue:queue(atomizer_parse:path()),
+    Atoms :: multimaps:multimap(atom(), location()).
+loop(Pool, Queue, Atoms) ->
+    case {sets:size(Pool), queue:len(Queue)} of
+        {0, 0} ->
+            {ok, Atoms};
 
--spec init(pid()) -> ok.
-init(Callback) ->
-    put(callback, Callback),
-    loop(#state{}).
+        {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_FILE_LIMIT, QueueSize > 0 ->
+            {{value, Path}, TailQueue} = queue:out(Queue),
+            spawn_link(atomizer_parse, parse_path, [self(), Path]),
+            loop(sets:add_element(Path, Pool), TailQueue, Atoms);
 
--spec loop(#state{}) -> ok.
-loop(State) ->
-    #state{
-        expect_files = ExpectFiles,
-        file_pool    = FilePool,
-        file_queue   = FileQueue,
-        atoms        = Atoms
-    } = State,
-    case sets:is_empty(FilePool) and queue:is_empty(FileQueue) and (ExpectFiles == false) of
-        true ->
-            get(callback) ! {ok, Atoms},
-            ok;
-        false ->
-            FilesInProgress = sets:size(FilePool),
+        _ ->
             receive
-                {file, FileName} when FilesInProgress >= ?OPEN_FILE_LIMIT ->
-                    loop(State#state{file_queue = queue:in(FileName, FileQueue)});
+                {add_path, Path} ->
+                    loop(Pool, queue:in(Path, Queue), Atoms);
 
-                {file, FileName} ->
-                    spawn_link(atomizer_parse, parse_file, [self(), FileName]),
-                    loop(State#state{file_pool = sets:add_element(FileName, FilePool)});
+                {atom, Atom, File, Location} ->
+                    loop(Pool, Queue, multimaps:put(Atom, {File, Location}, Atoms));
 
-                {atom, Atom, FileName, Location} ->
-                    loop(State#state{atoms = multimaps:put(Atom, {FileName, Location}, Atoms)});
-
-                {done_parsing_file, FileName} when FilesInProgress > ?OPEN_FILE_LIMIT ->
-                    case queue:out(FileQueue) of
-                        {{value, FileName1}, Queue} ->
-                            spawn_link(atomizer_parse, parse_file, [self(), FileName1]),
-                            loop(State#state{file_queue = Queue, file_pool = sets:del_element(FileName, FilePool)});
-                        {empty, _} ->
-                            loop(State#state{file_pool = sets:del_element(FileName, FilePool)})
-                    end;
-
-                {done_parsing_file, FileName} ->
-                    loop(State#state{file_pool = sets:del_element(FileName, FilePool)});
-
-                done_collecting_files ->
-                    loop(State#state{expect_files = false});
+                {done_path, Path} ->
+                    loop(sets:del_element(Path, Pool), Queue, Atoms);
 
                 {error, Error} ->
-                    get(callback) ! {error, Error},
-                    ok
+                    {error, Error}
             end
     end.
-
--spec collect_files(Callback :: pid(), source()) -> ok.
-collect_files(Callback, {file, File}) ->
-    Callback ! {file, File},
-    ok;
-
-collect_files(Callback, {dir, Dir}) ->
-    {Files, Dirs} = list_dir(Dir),
-    collect_files(Callback, {files, Files}),
-    collect_files(Callback, {dirs, Dirs});
-
-collect_files(Callback, {files, Files}) ->
-    lists:foreach(fun (File) -> collect_files(Callback, {file, File}) end, Files),
-    ok;
-
-collect_files(Callback, {dirs, Dirs}) ->
-    lists:foreach(fun (Dir) -> collect_files(Callback, {dir, Dir}) end, Dirs),
-    ok.
-
--spec list_dir(Dir :: file:filename()) -> {Files :: [file:filename()], Dirs :: [file:filename()]}.
-list_dir(Dir) ->
-    {ok, Names} = file:list_dir(Dir),
-    lists:foldl(fun (Name, {Files, Dirs}) ->
-                    Path = Dir ++ "/" ++ Name,
-                    {ok, Info} = file:read_file_info(Path),
-                    case Info#file_info.type of
-                        directory -> {Files, [Path | Dirs]};
-                        regular ->
-                            case is_erlang(Name) of
-                                true  -> {[Path | Files], Dirs};
-                                false -> {Files, Dirs}
-                            end
-                    end
-                end, {[], []}, Names).
-
--spec is_erlang(file:filename()) -> boolean().
-is_erlang(FileName) ->
-    lists:any(fun (Ext) -> lists:suffix(Ext, FileName) end, ?ERLANG_EXTENSIONS).
