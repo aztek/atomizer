@@ -28,7 +28,7 @@ parse_path(Callback, {dir, Dir}) ->
     case file:list_dir(Dir) of
         {ok, Names} ->
             lists:foreach(fun (Name) ->
-                Path = Dir ++ "/" ++ Name,
+                Path = filename:join(Dir, Name),
                 {ok, Info} = file:read_file_info(Path),
                 case Info#file_info.type of
                     directory ->
@@ -40,7 +40,7 @@ parse_path(Callback, {dir, Dir}) ->
                         end;
                     _ -> ignore
                 end
-                          end, Names),
+            end, Names),
             Callback ! {done_path, {dir, Dir}};
 
         {error, Error} ->
