@@ -60,11 +60,17 @@ parse_epp(Epp) ->
         {eof, _} -> ok;
 
         {warning, Info} ->
-            io:format("Warning [~p]: ~w~n", [get(filename), Info]),
+            io:format("Warning (~s): ~w~n", [get(filename), Info]),
+            parse_epp(Epp);
+
+        {error, {_, epp, {include, file, _}}} ->
+            parse_epp(Epp);
+
+        {error, {_, epp, {undefined, _, _}}} ->
             parse_epp(Epp);
 
         {error, Info} ->
-            io:format("Error [~p]: ~w~n", [get(filename), Info]),
+            io:format("Error (~s): ~w~n", [get(filename), Info]),
             parse_epp(Epp)
     end.
 
