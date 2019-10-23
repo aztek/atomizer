@@ -28,7 +28,7 @@ loop(Atoms, InProgress, DoneAtoms) ->
             end;
 
         {comparison, Atom, Btom, {yes, Reason}} ->
-            get(callback) ! {warn, Atom, Btom, Reason},
+            get(callback) ! {warning, Atom, Btom, Reason},
             loop(Atoms, InProgress - 1, DoneAtoms);
 
         {comparison, _, _, no} ->
