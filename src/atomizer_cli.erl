@@ -20,7 +20,7 @@ list_dirs(Dirs)   -> list({dirs, Dirs}).
 list(Source) ->
     case atomizer:atomize(Source) of
         {ok, Atoms, _} -> list_atoms(Atoms);
-        {error, Error} -> io:format(standard_error, "Error: ~s~n", [Error])
+        {error, Error} -> io:format(standard_error, "Error: ~p~n", [Error])
     end.
 
 -spec list_atoms(multimaps:multimap(atom(), atomizer:location())) -> ok.
@@ -36,7 +36,7 @@ show_dirs(Dirs)   -> show({dirs, Dirs}).
 show(Source) ->
     case atomizer:atomize(Source) of
         {ok, Atoms, _} -> show_atoms(Atoms);
-        {error, Error} -> io:format(standard_error, "Error: ~s~n", [Error])
+        {error, Error} -> io:format(standard_error, "Error: ~p~n", [Error])
     end.
 
 -spec show_atoms(multimaps:multimap(atom(), atomizer:location())) -> ok.
@@ -59,13 +59,17 @@ warn_dirs(Dirs)   -> warn({dirs, Dirs}).
 warn(Source) ->
     case atomizer:atomize(Source) of
         {ok, Atoms, Warnings} ->
-            io:format("Found ~p warning in ~p atoms~n", [length(sets:to_list(Warnings)), length(maps:keys(Atoms))]),
+            NrWarnings = length(sets:to_list(Warnings)),
+            NrAtoms = length(maps:keys(Atoms)),
+            io:format("Found ~p warning(s) in ~p atoms(s)~n", [NrWarnings, NrAtoms]),
             lists:foreach(fun (Warning) -> warn(Atoms, Warning) end,
                           sets:to_list(Warnings));
 
         {error, Error} ->
-            io:format(standard_error, "Error: ~s~n", [Error])
+            io:format(standard_error, "Error: ~p~n", [Error])
     end.
 
-warn(_Atoms, {A, B}) ->
-    io:format("Possible typo: ~w vs ~w~n", [A, B]).
+warn(Atoms, {A, B}) ->
+    io:format("Possible typo: ~w vs ~w~n~n", [A, B]),
+    show_atom(A, maps:get(A, Atoms)),
+    show_atom(B, maps:get(B, Atoms)).
