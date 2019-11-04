@@ -6,7 +6,6 @@
 
 -export([collect/2]).
 
--spec collect(Callback :: pid(), Source :: source()) -> ok.
 collect(Callback, Source) ->
     put(callback, Callback),
     Queue = case Source of
