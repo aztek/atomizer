@@ -16,7 +16,7 @@
     Warnings :: sets:set({atom(), atom()}).
 atomize(Source) ->
     put(comparison, spawn_link(atomizer_compare, compare, [self()])),
-    spawn_link(atomizer_collect, init, [self(), Source]),
+    spawn_link(atomizer_collect, collect, [self(), Source]),
     loop(multimaps:empty(), sets:new()).
 
 -spec loop(Atoms, Warnings) -> {ok, Atoms, Warnings} | {error, atom()} when
