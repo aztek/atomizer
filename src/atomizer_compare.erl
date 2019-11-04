@@ -1,6 +1,6 @@
 -module(atomizer_compare).
 
--export([compare/1]).
+-export([compare/1, levenshtein/2]).
 
 compare(Callback) ->
     put(callback, Callback),
@@ -38,13 +38,24 @@ loop(Atoms, InProgress, DoneAtoms) ->
             loop(Atoms, InProgress, true)
     end.
 
--spec possible_typo(S :: atom(), T :: atom()) -> {yes, Info :: term()} | no.
-possible_typo(S, T) ->
-    D = levenshtein(atom_to_list(S), atom_to_list(T)),
-    case D of
-        _ when D < 2 -> {yes, {levenshtein, D}};
-        _ -> no
+-spec possible_typo(A :: atom(), B :: atom()) -> {yes, Info :: term()} | no.
+possible_typo(A, B) ->
+    S = atom_to_list(A),
+    T = atom_to_list(B),
+    D = similar(S, T),
+    if
+        length(S) > 1, length(T) > 1, D -> {yes, similar};
+        true -> no
     end.
+
+-spec similar(A :: string(), B :: string()) -> boolean().
+%% Check whether two strings are different in exactly one character.
+%% In other words, that their Levenshtein distance is 1.
+similar([C | As], [C | Bs]) -> similar(As, Bs);
+similar([_ | As], [_ | Bs]) -> As == Bs;
+similar([], [_]) -> true;
+similar([_], []) -> true;
+similar(_, _) -> false.
 
 -spec levenshtein(S :: string(), T :: string()) -> Distance :: integer().
 levenshtein(S, T) ->
