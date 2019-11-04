@@ -29,16 +29,21 @@ parse_path(Callback, {dir, Dir}) ->
         {ok, Names} ->
             lists:foreach(fun (Name) ->
                 Path = filename:join(Dir, Name),
-                {ok, Info} = file:read_file_info(Path),
-                case Info#file_info.type of
-                    directory ->
-                        Callback ! {add_path, {dir, Path}};
-                    regular ->
-                        case is_erlang(Name) of
-                            true  -> Callback ! {add_path, {erl, Path}};
-                            false -> ignore
+                case file:read_file_info(Path) of
+                    {ok, Info} ->
+                        case Info#file_info.type of
+                            directory ->
+                                Callback ! {add_path, {dir, Path}};
+                            regular ->
+                                case is_erlang(Name) of
+                                    true  -> Callback ! {add_path, {erl, Path}};
+                                    false -> ignore
+                                end;
+                            _ -> ignore
                         end;
-                    _ -> ignore
+
+                    {error, Error} ->
+                        Callback ! {error, {Error, Path}}
                 end
             end, Names),
             Callback ! {done_path, {dir, Dir}};
