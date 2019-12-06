@@ -1,32 +1,40 @@
 -module(atomizer).
 
--export_type([location/0]).
+-export_type([position/0, location/0, locations/0, atoms/0]).
 
 -type source() :: {file, file:filename()}
                 | {dir,  file:filename()}
                 | {files, [file:filename()]}
                 | {dirs,  [file:filename()]}.
 
--type location() :: {file:filename(), Line :: pos_integer()}.
+-type position()  :: pos_integer().
+-type location()  :: {file:filename(), position()}.
+-type locations() :: multimaps:multimap(file:filename(), position()).
+-type atoms()     :: #{atom() => locations()}.
 
 -export([atomize/1]).
 
 -spec atomize(source()) -> {ok, Atoms, Warnings} | {error, term()} when
-    Atoms    :: multimaps:multimap(atom(), location()),
+    Atoms    :: atoms(),
     Warnings :: sets:set({atom(), atom()}).
 atomize(Source) ->
     put(comparison, spawn_link(atomizer_compare, compare, [self()])),
     spawn_link(atomizer_collect, collect, [self(), Source]),
-    loop(multimaps:empty(), sets:new()).
+    loop(maps:new(), sets:new()).
 
 -spec loop(Atoms, Warnings) -> {ok, Atoms, Warnings} | {error, atom()} when
-    Atoms    :: multimaps:multimap(atom(), location()),
+    Atoms    :: atoms(),
     Warnings :: sets:set({atom(), atom()}).
 loop(Atoms, Warnings) ->
     receive
-        {atom, Atom, File, Location} ->
+        {atom, Atom, File, Position} ->
             get(comparison) ! {atom, Atom},
-            loop(multimaps:put(Atom, {File, Location}, Atoms), Warnings);
+            Locations = maps:get(Atom, Atoms, maps:new()),
+            Positions = maps:get(File, Locations, sets:new()),
+            UpdatedPositions = sets:add_element(Position, Positions),
+            UpdatedLocations = maps:put(File, UpdatedPositions, Locations),
+            UpdatedAtoms = maps:put(Atom, UpdatedLocations, Atoms),
+            loop(UpdatedAtoms, Warnings);
 
         done_atoms ->
             get(comparison) ! done_atoms,
