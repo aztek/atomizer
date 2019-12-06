@@ -62,8 +62,9 @@ levenshtein(S, T) ->
     {D, _} = levenshtein(S, T, #{}),
     D.
 
--spec levenshtein(S :: string(), T :: string(), Cache) -> Distance :: integer() when
-    Cache :: #{{S :: string(), T :: string()} => Distance :: integer()}.
+-spec levenshtein(string(), string(), Cache) -> {Distance, Cache} when
+    Distance :: non_neg_integer(),
+    Cache    :: #{{string(), string()} => Distance}.
 levenshtein([], T, C) -> {length(T), C#{{[], T} => length(T)}};
 levenshtein(S, [], C) -> {length(S), C#{{S, []} => length(S)}};
 levenshtein([X | S], [X | T], C) -> levenshtein(S, T, C);
