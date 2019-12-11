@@ -42,6 +42,13 @@ parse_path(Callback, {dir, Dir}) ->
                             _ -> ignore
                         end;
 
+                    {error, enoent} ->
+                        % Error because Path is a symlink?
+                        case file:read_link_all(Path) of
+                            {ok, _}    -> io:format("Warning: skipping symbolic link ~s~n", [Path]);
+                            {error, _} -> Callback ! {error, {enoent, Path}}
+                        end;
+
                     {error, Error} ->
                         Callback ! {error, {Error, Path}}
                 end
