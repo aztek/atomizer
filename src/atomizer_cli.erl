@@ -2,29 +2,28 @@
 
 -export([
     main/1,
-    list_files/1,
-    show_files/1,
-    show_files/2,
-    warn_files/1,
-    warn_files/2,
-    list_dirs/1,
-    show_dirs/1,
-    show_dirs/2,
-    warn_dirs/1,
-    warn_dirs/2
+    run/3
 ]).
 
--spec main([string()]) -> no_return().
-main(CmdArgs) ->
-    show(CmdArgs, true).
+-spec main([string()]) -> ok.
+main(_CmdArgs) ->
+    run(warn, {dirs, ["."]}, true).
 
-list_files(Files) -> list({files, Files}).
-list_dirs(Dirs)   -> list({dirs, Dirs}).
-
-list(Source) ->
+-spec run(Action, Source, Verbose) -> ok when
+    Action :: list | show | warn,
+    Source :: atomizer:source(),
+    Verbose :: boolean().
+run(Action, Source, Verbose) ->
     case atomizer:atomize(Source) of
-        {ok, Atoms, _} -> list_atoms(Atoms);
-        {error, Error} -> io:format(standard_error, "Error: ~p~n", [Error])
+        {ok, Atoms, Warnings} ->
+            case Action of
+                list -> list_atoms(Atoms);
+                show -> show_atoms(Atoms, Verbose);
+                warn -> warn_atoms(Atoms, Warnings, Verbose)
+            end;
+
+        {error, Error} ->
+            io:format(standard_error, "Error: ~p~n", [Error])
     end.
 
 -spec list_atoms(atomizer:atoms()) -> ok.
@@ -32,18 +31,6 @@ list_atoms(Atoms) ->
     case lists:sort(maps:keys(Atoms)) of
         []   -> io:format("No atoms~n", []);
         Keys -> lists:foreach(fun (Atom) -> io:format("~p~n", [Atom]) end, Keys)
-    end.
-
-show_files(Files) -> show_files(Files, false).
-show_files(Files, Verbose) -> show({files, Files}, Verbose).
-
-show_dirs(Dirs) -> show_dirs(Dirs, false).
-show_dirs(Dirs, Verbose)  -> show({dirs, Dirs}, Verbose).
-
-show(Source, Verbose) ->
-    case atomizer:atomize(Source) of
-        {ok, Atoms, _} -> show_atoms(Atoms, Verbose);
-        {error, Error} -> io:format(standard_error, "Error: ~p~n", [Error])
     end.
 
 -spec show_atoms(atomizer:atoms(), boolean()) -> ok.
@@ -67,40 +54,27 @@ show_atom(Atom, Locations, Verbose) ->
 
 -spec show_location(file:filename(), non_neg_integer() | atomizer:positions()) -> ok.
 show_location(Filename, NrPositions) when is_integer(NrPositions) ->
-    Occurrences = case NrPositions of
-                      1 -> "occurrence";
-                      _ -> "occurrences"
-                  end,
-    io:format("~s (~w ~s)~n", [Filename, NrPositions, Occurrences]);
+    io:format("~s (~w ~s)~n",
+              [Filename, NrPositions, plural(NrPositions, "occurrence", "occurrences")]);
 
 show_location(Filename, Positions) ->
     lists:foreach(fun (Position) -> io:format("~s:~w~n", [Filename, Position]) end,
                   lists:sort(sets:to_list(Positions))).
 
-warn_files(Files) -> warn_files(Files, false).
-warn_files(Files, Verbose) -> warn({files, Files}, Verbose).
-
-warn_dirs(Dirs) -> warn_dirs(Dirs, false).
-warn_dirs(Dirs, Verbose) -> warn({dirs, Dirs}, Verbose).
+-spec warn_atoms(atomizer:atoms(), Warnings :: [{atom(), atom()}], Verbose :: boolean()) -> ok.
+warn_atoms(Atoms, Warnings, Verbose) ->
+    NrAtoms = length(maps:keys(Atoms)),
+    NrWarnings = length(Warnings),
+    io:format("Found ~p ~s in ~p ~s~n",
+              [NrWarnings, plural(NrWarnings, "warning", "warnings"),
+               NrAtoms,    plural(NrAtoms,    "atom",     "atoms")]),
+    lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning, Verbose) end, Warnings).
 
 plural(1, Singular, _) -> Singular;
 plural(_, _, Plural)   -> Plural.
 
-warn(Source, Verbose) ->
-    case atomizer:atomize(Source) of
-        {ok, Atoms, Warnings} ->
-            NrWarnings = length(Warnings),
-            NrAtoms = length(maps:keys(Atoms)),
-            io:format("Found ~p ~s in ~p ~s~n",
-                      [NrWarnings, plural(NrWarnings, "warning", "warnings"),
-                       NrAtoms,    plural(NrAtoms,    "atom",     "atoms")]),
-            lists:foreach(fun (Warning) -> warn(Atoms, Warning, Verbose) end, Warnings);
-
-        {error, Error} ->
-            io:format(standard_error, "Error: ~p~n", [Error])
-    end.
-
-warn(Atoms, {A, B}, Verbose) ->
+-spec warn_atom(atomizer:atoms(), Warning :: {atom(), atom()}, Verbose :: boolean()) -> ok.
+warn_atom(Atoms, {A, B}, Verbose) ->
     io:format("Possible typo: ~w vs ~w~n~n", [A, B]),
     show_atom(A, maps:get(A, Atoms), Verbose),
     show_atom(B, maps:get(B, Atoms), Verbose).
