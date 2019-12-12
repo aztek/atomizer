@@ -17,13 +17,7 @@ loop(Atoms, InProgress, DoneAtoms) ->
                     loop(Atoms, InProgress, DoneAtoms);
 
                 false ->
-                    Pid = self(),
-                    lists:foreach(fun (Btom) ->
-                                      spawn_link(fun () ->
-                                                     Pid ! {comparison, Atom, Btom, possible_typo(Atom, Btom)}
-                                                 end)
-                                  end,
-                                  sets:to_list(Atoms)),
+                    compare_all(Atom, Atoms),
                     loop(sets:add_element(Atom, Atoms), InProgress + sets:size(Atoms), DoneAtoms)
             end;
 
@@ -37,6 +31,13 @@ loop(Atoms, InProgress, DoneAtoms) ->
         done_atoms ->
             loop(Atoms, InProgress, true)
     end.
+
+compare_all(Atom, Atoms) ->
+    lists:foreach(fun (Btom) -> compare(Atom, Btom) end, sets:to_list(Atoms)).
+
+compare(Atom, Btom) ->
+    Pid = self(),
+    spawn_link(fun () -> Pid ! {comparison, Atom, Btom, possible_typo(Atom, Btom)} end).
 
 -spec possible_typo(A :: atom(), B :: atom()) -> {yes, Info :: term()} | no.
 possible_typo(A, B) ->
