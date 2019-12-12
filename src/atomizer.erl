@@ -1,55 +1,42 @@
 -module(atomizer).
 
--export_type([position/0, location/0, locations/0, atoms/0]).
+-export_type([source/0, position/0]).
 
 -type source() :: {file, file:filename()}
                 | {dir,  file:filename()}
                 | {files, [file:filename()]}
                 | {dirs,  [file:filename()]}.
 
--type position()  :: pos_integer().
--type location()  :: {file:filename(), position()}.
--type locations() :: multimaps:multimap(file:filename(), position()).
--type atoms()     :: #{atom() => locations()}.
+-type position() :: pos_integer().
 
--export([atomize/1]).
+-export([atomize/3]).
 
--spec atomize(source()) -> {ok, Atoms, Warnings} | {error, term()} when
-    Atoms    :: atoms(),
-    Warnings :: [{atom(), atom()}].
-atomize(Source) ->
+-spec atomize(source(), ets:tid(), ets:tid()) -> ok | {error, term()}.
+atomize(Source, AtomsTable, WarningsTable) ->
+    put(atoms_table, AtomsTable),
+    put(warnings_table, WarningsTable),
     put(comparison, spawn_link(atomizer_compare, compare, [self()])),
-    ets:new(warnings, [private, named_table, set]),
     spawn_link(atomizer_collect, collect, [self(), Source]),
-    Result = loop(maps:new()),
-    ets:delete(warnings),
-    Result.
+    loop().
 
--spec loop(Atoms) -> {ok, Atoms, Warnings} | {error, atom()} when
-    Atoms    :: atoms(),
-    Warnings :: [{atom(), atom()}].
-loop(Atoms) ->
+-spec loop() -> ok | {error, atom()}.
+loop() ->
     receive
         {atom, Atom, File, Position} ->
             get(comparison) ! {atom, Atom},
-            Locations = maps:get(Atom, Atoms, maps:new()),
-            Positions = maps:get(File, Locations, sets:new()),
-            UpdatedPositions = sets:add_element(Position, Positions),
-            UpdatedLocations = maps:put(File, UpdatedPositions, Locations),
-            UpdatedAtoms = maps:put(Atom, UpdatedLocations, Atoms),
-            loop(UpdatedAtoms);
+            ets:insert(get(atoms_table), {Atom, {File, Position}}),
+            loop();
 
         done_atoms ->
             get(comparison) ! done_atoms,
-            loop(Atoms);
+            loop();
 
         {warning, Atom, Btom, _} ->
-            ets:insert(warnings, {{Atom, Btom}}),
-            loop(Atoms);
+            ets:insert(get(warnings_table), {{Atom, Btom}}),
+            loop();
 
         done_warnings ->
-            Warnings = lists:map(fun ({W}) -> W end, ets:tab2list(warnings)),
-            {ok, Atoms, Warnings};
+            ok;
 
         {error, Error} ->
             {error, Error}

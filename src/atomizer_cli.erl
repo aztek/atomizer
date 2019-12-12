@@ -9,39 +9,51 @@
 main(_CmdArgs) ->
     run(warn, {dirs, ["."]}, true).
 
--spec run(Action, Source, Verbose) -> ok when
-    Action :: list | show | warn,
-    Source :: atomizer:source(),
-    Verbose :: boolean().
+-spec run(list | show | warn, atomizer:source(), boolean()) -> ok.
 run(Action, Source, Verbose) ->
-    case atomizer:atomize(Source) of
-        {ok, Atoms, Warnings} ->
+    AtomsTable = ets:new(atoms, [public, bag]),
+    WarningsTable = ets:new(warnings, [public, set]),
+    case atomizer:atomize(Source, AtomsTable, WarningsTable) of
+        ok ->
             case Action of
-                list -> list_atoms(Atoms);
-                show -> show_atoms(Atoms, Verbose);
-                warn -> warn_atoms(Atoms, Warnings, Verbose)
+                list -> list_atoms(AtomsTable);
+                show -> show_atoms(AtomsTable, Verbose);
+                warn -> warn_atoms(AtomsTable, WarningsTable, Verbose)
             end;
 
         {error, Error} ->
             io:format(standard_error, "Error: ~p~n", [Error])
+    end,
+    ets:delete(WarningsTable),
+    ets:delete(AtomsTable),
+    ok.
+
+-spec list_atoms(ets:tid()) -> ok.
+list_atoms(AtomsTable) ->
+    case ets:info(AtomsTable, size) of
+        0 -> io:format("No atoms~n", []);
+        _ -> lists:foreach(fun list_atom/1, list_keys(AtomsTable))
     end.
 
--spec list_atoms(atomizer:atoms()) -> ok.
-list_atoms(Atoms) ->
-    case lists:sort(maps:keys(Atoms)) of
-        []   -> io:format("No atoms~n", []);
-        Keys -> lists:foreach(fun (Atom) -> io:format("~p~n", [Atom]) end, Keys)
-    end.
+list_keys(Tab) -> lists:sort(list_keys_helper(Tab, ets:first(Tab))).
+list_keys_helper(_, '$end_of_table') -> [];
+list_keys_helper(Tab, Key) -> [Key | list_keys_helper(Tab, ets:next(Tab, Key))].
 
--spec show_atoms(atomizer:atoms(), boolean()) -> ok.
-show_atoms(Atoms, Verbose) ->
-    lists:foreach(fun (Atom) -> show_atom(Atom, maps:get(Atom, Atoms), Verbose) end,
-                  lists:sort(maps:keys(Atoms))).
+-spec list_atom(atom()) -> ok.
+list_atom(Atom) -> io:format("~p~n", [Atom]).
 
--spec show_atom(atom(), atomizer:locations(), boolean()) -> ok.
-show_atom(Atom, Locations, Verbose) ->
+-spec show_atoms(ets:tid(), boolean()) -> ok.
+show_atoms(AtomsTable, Verbose) ->
+    lists:foreach(fun (Atom) -> show_atom(Atom, AtomsTable, Verbose) end, list_keys(AtomsTable)).
+
+-spec show_atom(atom(), ets:tid(), boolean()) -> ok.
+show_atom(Atom, AtomsTable, Verbose) ->
     io:format("~p~n", [Atom]),
-    Info = [{filename:absname(File), Positions, sets:size(Positions)} ||
+    Locations = lists:foldl(fun({F, P}, M) ->
+                                Ps = maps:get(F, M, sets:new()),
+                                maps:put(F, sets:add_element(P, Ps), M)
+                            end, #{}, [L || {_, L} <- ets:lookup(AtomsTable, Atom)]),
+    Info = [{filename:absname(File), lists:sort(sets:to_list(Positions)), sets:size(Positions)} ||
             {File, Positions} <- maps:to_list(Locations)],
     lists:foreach(fun ({File, Positions, NrPositions}) ->
                       case Verbose of
@@ -49,32 +61,31 @@ show_atom(Atom, Locations, Verbose) ->
                           false -> show_location(File, NrPositions)
                       end
                   end,
-                  lists:keysort(3, Info)),
+                  lists:reverse(lists:keysort(3, Info))),
     io:format("~n").
 
--spec show_location(file:filename(), non_neg_integer() | atomizer:positions()) -> ok.
+-spec show_location(file:filename(), non_neg_integer() | [atomizer:position()]) -> ok.
 show_location(Filename, NrPositions) when is_integer(NrPositions) ->
     io:format("~s (~w ~s)~n",
               [Filename, NrPositions, plural(NrPositions, "occurrence", "occurrences")]);
 
 show_location(Filename, Positions) ->
-    lists:foreach(fun (Position) -> io:format("~s:~w~n", [Filename, Position]) end,
-                  lists:sort(sets:to_list(Positions))).
+    lists:foreach(fun (Position) -> io:format("~s:~w~n", [Filename, Position]) end, Positions).
 
--spec warn_atoms(atomizer:atoms(), Warnings :: [{atom(), atom()}], Verbose :: boolean()) -> ok.
-warn_atoms(Atoms, Warnings, Verbose) ->
-    NrAtoms = length(maps:keys(Atoms)),
-    NrWarnings = length(Warnings),
+-spec warn_atoms(ets:tid(), ets:tid(), boolean()) -> ok.
+warn_atoms(AtomsTable, WarningsTable, Verbose) ->
+    NrAtoms = ets:info(AtomsTable, size),
+    NrWarnings = ets:info(WarningsTable, size),
     io:format("Found ~p ~s in ~p ~s~n",
               [NrWarnings, plural(NrWarnings, "warning", "warnings"),
                NrAtoms,    plural(NrAtoms,    "atom",     "atoms")]),
-    lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning, Verbose) end, Warnings).
+    ets:foldl(fun ({Warning}, _) -> warn_atom(AtomsTable, Warning, Verbose) end, ok, WarningsTable).
 
 plural(1, Singular, _) -> Singular;
 plural(_, _, Plural)   -> Plural.
 
--spec warn_atom(atomizer:atoms(), Warning :: {atom(), atom()}, Verbose :: boolean()) -> ok.
-warn_atom(Atoms, {A, B}, Verbose) ->
+-spec warn_atom(ets:tid(), {atom(), atom()}, boolean()) -> ok.
+warn_atom(AtomsTable, {A, B}, Verbose) ->
     io:format("Possible typo: ~w vs ~w~n~n", [A, B]),
-    show_atom(A, maps:get(A, Atoms), Verbose),
-    show_atom(B, maps:get(B, Atoms), Verbose).
+    show_atom(A, AtomsTable, Verbose),
+    show_atom(B, AtomsTable, Verbose).
