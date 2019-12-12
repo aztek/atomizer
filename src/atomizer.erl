@@ -16,16 +16,19 @@
 
 -spec atomize(source()) -> {ok, Atoms, Warnings} | {error, term()} when
     Atoms    :: atoms(),
-    Warnings :: sets:set({atom(), atom()}).
+    Warnings :: [{atom(), atom()}].
 atomize(Source) ->
     put(comparison, spawn_link(atomizer_compare, compare, [self()])),
+    ets:new(warnings, [private, named_table, set]),
     spawn_link(atomizer_collect, collect, [self(), Source]),
-    loop(maps:new(), sets:new()).
+    Result = loop(maps:new()),
+    ets:delete(warnings),
+    Result.
 
--spec loop(Atoms, Warnings) -> {ok, Atoms, Warnings} | {error, atom()} when
+-spec loop(Atoms) -> {ok, Atoms, Warnings} | {error, atom()} when
     Atoms    :: atoms(),
-    Warnings :: sets:set({atom(), atom()}).
-loop(Atoms, Warnings) ->
+    Warnings :: [{atom(), atom()}].
+loop(Atoms) ->
     receive
         {atom, Atom, File, Position} ->
             get(comparison) ! {atom, Atom},
@@ -34,16 +37,18 @@ loop(Atoms, Warnings) ->
             UpdatedPositions = sets:add_element(Position, Positions),
             UpdatedLocations = maps:put(File, UpdatedPositions, Locations),
             UpdatedAtoms = maps:put(Atom, UpdatedLocations, Atoms),
-            loop(UpdatedAtoms, Warnings);
+            loop(UpdatedAtoms);
 
         done_atoms ->
             get(comparison) ! done_atoms,
-            loop(Atoms, Warnings);
+            loop(Atoms);
 
         {warning, Atom, Btom, _} ->
-            loop(Atoms, sets:add_element({Atom, Btom}, Warnings));
+            ets:insert(warnings, {{Atom, Btom}}),
+            loop(Atoms);
 
         done_warnings ->
+            Warnings = lists:map(fun ({W}) -> W end, ets:tab2list(warnings)),
             {ok, Atoms, Warnings};
 
         {error, Error} ->

@@ -83,14 +83,18 @@ warn_files(Files, Verbose) -> warn({files, Files}, Verbose).
 warn_dirs(Dirs) -> warn_dirs(Dirs, false).
 warn_dirs(Dirs, Verbose) -> warn({dirs, Dirs}, Verbose).
 
+plural(1, Singular, _) -> Singular;
+plural(_, _, Plural)   -> Plural.
+
 warn(Source, Verbose) ->
     case atomizer:atomize(Source) of
         {ok, Atoms, Warnings} ->
-            NrWarnings = length(sets:to_list(Warnings)),
+            NrWarnings = length(Warnings),
             NrAtoms = length(maps:keys(Atoms)),
-            io:format("Found ~p warning(s) in ~p atoms(s)~n", [NrWarnings, NrAtoms]),
-            lists:foreach(fun (Warning) -> warn(Atoms, Warning, Verbose) end,
-                          sets:to_list(Warnings));
+            io:format("Found ~p ~s in ~p ~s~n",
+                      [NrWarnings, plural(NrWarnings, "warning", "warnings"),
+                       NrAtoms,    plural(NrAtoms,    "atom",     "atoms")]),
+            lists:foreach(fun (Warning) -> warn(Atoms, Warning, Verbose) end, Warnings);
 
         {error, Error} ->
             io:format(standard_error, "Error: ~p~n", [Error])
