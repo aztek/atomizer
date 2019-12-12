@@ -4,40 +4,44 @@
 
 compare(Callback) ->
     put(callback, Callback),
-    loop(sets:new(), 0, false).
+    ets:new(atoms, [private, named_table, set]),
+    Result = loop(0, false),
+    ets:delete(atoms),
+    Result.
 
-loop(_, 0, true) ->
+loop(0, true) ->
     get(callback) ! done_warnings;
 
-loop(Atoms, InProgress, DoneAtoms) ->
+loop(InProgress, DoneAtoms) ->
     receive
         {atom, Atom} ->
-            case sets:is_element(Atom, Atoms) of
+            case ets:member(atoms, Atom) of
                 true ->
-                    loop(Atoms, InProgress, DoneAtoms);
+                    loop(InProgress, DoneAtoms);
 
                 false ->
-                    compare_all(Atom, Atoms),
-                    loop(sets:add_element(Atom, Atoms), InProgress + sets:size(Atoms), DoneAtoms)
+                    NrComparisons = compare_all(Atom),
+                    ets:insert(atoms, {Atom}),
+                    loop(InProgress + NrComparisons, DoneAtoms)
             end;
 
-        {comparison, Atom, Btom, {yes, Reason}} ->
-            get(callback) ! {warning, Atom, Btom, Reason},
-            loop(Atoms, InProgress - 1, DoneAtoms);
-
-        {comparison, _, _, no} ->
-            loop(Atoms, InProgress - 1, DoneAtoms);
+        {comparison, Atom, Btom, Result} ->
+            case Result of
+                {yes, Reason} -> get(callback) ! {warning, Atom, Btom, Reason};
+                no -> ok
+            end,
+            loop(InProgress - 1, DoneAtoms);
 
         done_atoms ->
-            loop(Atoms, InProgress, true)
+            loop(InProgress, true)
     end.
 
-compare_all(Atom, Atoms) ->
-    lists:foreach(fun (Btom) -> compare(Atom, Btom) end, sets:to_list(Atoms)).
-
-compare(Atom, Btom) ->
+compare_all(Atom) ->
     Pid = self(),
-    spawn_link(fun () -> Pid ! {comparison, Atom, Btom, possible_typo(Atom, Btom)} end).
+    ets:foldl(fun ({Btom}, Comparisons) ->
+                  spawn_link(fun() -> Pid ! {comparison, Atom, Btom, possible_typo(Atom, Btom)} end),
+                  Comparisons + 1
+              end, 0, atoms).
 
 -spec possible_typo(A :: atom(), B :: atom()) -> {yes, Info :: term()} | no.
 possible_typo(A, B) ->
