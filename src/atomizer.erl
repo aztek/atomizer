@@ -6,29 +6,23 @@
 
 -spec atomize(source()) -> {ok, atoms(), warnings()} | {error, term()}.
 atomize(Source) ->
-    put(comparison, spawn_link(atomizer_compare, compare, [self()])),
+    Pid = spawn_link(atomizer_compare, compare, [self()]),
     spawn_link(atomizer_collect, collect, [self(), Source]),
-    loop(maps:new(), sets:new()).
+    loop(Pid, maps:new(), sets:new()).
 
--spec loop(atoms(), warnings()) -> {ok, atoms(), warnings()} | {error, atom()}.
-loop(Atoms, Warnings) ->
+-spec loop(pid(), atoms(), warnings()) -> {ok, atoms(), warnings()} | {error, atom()}.
+loop(Pid, Atoms, Warnings) ->
     receive
         {atom, Atom, File, Position} ->
-            get(comparison) ! {atom, Atom},
-            Locations = maps:get(Atom, Atoms, maps:new()),
-            Positions = maps:get(File, Locations, sets:new()),
-            UpdatedPositions = sets:add_element(Position, Positions),
-            UpdatedLocations = maps:put(File, UpdatedPositions, Locations),
-            UpdatedAtoms = maps:put(Atom, UpdatedLocations, Atoms),
-            loop(UpdatedAtoms, Warnings);
+            Pid ! {atom, Atom},
+            loop(Pid, add_atom_location(Atom, File, Position, Atoms), Warnings);
 
         done_atoms ->
-            get(comparison) ! done_atoms,
-            loop(Atoms, Warnings);
+            Pid ! done_atoms,
+            loop(Pid, Atoms, Warnings);
 
         {warning, Atom, Btom, _} ->
-            UpdatedWarnings = sets:add_element({Atom, Btom}, Warnings),
-            loop(Atoms, UpdatedWarnings);
+            loop(Pid, Atoms, sets:add_element({Atom, Btom}, Warnings));
 
         done_warnings ->
             {ok, Atoms, Warnings};
@@ -36,3 +30,11 @@ loop(Atoms, Warnings) ->
         {error, Error} ->
             {error, Error}
     end.
+
+-spec add_atom_location(atom(), file:filename(), position(), atoms()) -> atoms().
+add_atom_location(Atom, File, Position, Atoms) ->
+    Locations = maps:get(Atom, Atoms, maps:new()),
+    Positions = maps:get(File, Locations, sets:new()),
+    UpdatedPositions = sets:add_element(Position, Positions),
+    UpdatedLocations = maps:put(File, UpdatedPositions, Locations),
+    maps:put(Atom, UpdatedLocations, Atoms).

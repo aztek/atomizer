@@ -9,43 +9,40 @@
 -export([collect/2]).
 
 -spec collect(pid(), source()) -> ok | {error, term()}.
-collect(Callback, Source) ->
-    put(callback, Callback),
-    Queue = case Source of
-                {file,  File}  -> [{erl, File}];
-                {dir,   Dir}   -> [{dir, Dir}];
-                {files, Files} -> lists:map(fun (File) -> {erl, File} end, Files);
-                {dirs,  Dirs}  -> lists:map(fun (Dir)  -> {dir, Dir}  end, Dirs)
-            end,
-    loop(sets:new(), queue:from_list(Queue)).
+collect(Pid, Source) ->
+    loop(Pid, sets:new(), queue:from_list(source_to_paths(Source))).
 
--spec loop(Pool, Queue) -> ok | {error, term()} when
-    Pool  :: sets:set(atomizer_parse:path()),
-    Queue :: queue:queue(atomizer_parse:path()).
-loop(Pool, Queue) ->
+-spec source_to_paths(source()) -> [path()].
+source_to_paths({file,  File})  -> [{erl, File}];
+source_to_paths({dir,   Dir})   -> [{dir, Dir}];
+source_to_paths({files, Files}) -> lists:map(fun (File) -> {erl, File} end, Files);
+source_to_paths({dirs,  Dirs})  -> lists:map(fun (Dir)  -> {dir, Dir}  end, Dirs).
+
+-spec loop(pid(), Pool :: sets:set(path()), Queue :: queue:queue(path())) -> ok | {error, term()}.
+loop(Pid, Pool, Queue) ->
     case {sets:size(Pool), queue:len(Queue)} of
         {0, 0} ->
-            get(callback) ! done_atoms,
+            Pid ! done_atoms,
             ok;
 
         {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_FILE_LIMIT, QueueSize > 0 ->
             {{value, Path}, TailQueue} = queue:out(Queue),
             spawn_link(atomizer_parse, parse_path, [self(), Path]),
-            loop(sets:add_element(Path, Pool), TailQueue);
+            loop(Pid, sets:add_element(Path, Pool), TailQueue);
 
         _ ->
             receive
                 {add_path, Path} ->
-                    loop(Pool, queue:in(Path, Queue));
+                    loop(Pid, Pool, queue:in(Path, Queue));
 
                 {atom, Atom, File, Location} ->
-                    get(callback) ! {atom, Atom, File, Location},
-                    loop(Pool, Queue);
+                    Pid ! {atom, Atom, File, Location},
+                    loop(Pid, Pool, Queue);
 
                 {done_path, Path} ->
-                    loop(sets:del_element(Path, Pool), Queue);
+                    loop(Pid, sets:del_element(Path, Pool), Queue);
 
                 {error, Error} ->
-                    get(callback) ! {error, Error}
+                    Pid ! {error, Error}
             end
     end.

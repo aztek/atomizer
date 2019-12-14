@@ -8,20 +8,20 @@
 
 -export([parse_path/2]).
 
--spec parse_path(Callback :: pid(), path()) -> any().
-parse_path(Callback, {erl, File}) ->
+-spec parse_path(pid(), path()) -> any().
+parse_path(Pid, {erl, File}) ->
     put(filename, File),
-    put(callback, Callback),
+    put(pid, Pid),
     case epp:open(File, []) of
         {ok, Epp} ->
             parse_epp(Epp),
-            Callback ! {done_path, {erl, File}};
+            Pid ! {done_path, {erl, File}};
 
         {error, Error} ->
-            Callback ! {error, {Error, File}}
+            Pid ! {error, {Error, File}}
     end;
 
-parse_path(Callback, {dir, Dir}) ->
+parse_path(Pid, {dir, Dir}) ->
     case file:list_dir(Dir) of
         {ok, Names} ->
             lists:foreach(fun (Name) ->
@@ -30,10 +30,10 @@ parse_path(Callback, {dir, Dir}) ->
                     {ok, Info} ->
                         case Info#file_info.type of
                             directory ->
-                                Callback ! {add_path, {dir, Path}};
+                                Pid ! {add_path, {dir, Path}};
                             regular ->
                                 case is_erlang(Name) of
-                                    true  -> Callback ! {add_path, {erl, Path}};
+                                    true  -> Pid ! {add_path, {erl, Path}};
                                     false -> ignore
                                 end;
                             _ -> ignore
@@ -43,17 +43,17 @@ parse_path(Callback, {dir, Dir}) ->
                         % Error because Path is a symlink?
                         case file:read_link_all(Path) of
                             {ok, _}    -> io:format("Warning: skipping symbolic link ~s~n", [Path]);
-                            {error, _} -> Callback ! {error, {enoent, Path}}
+                            {error, _} -> Pid ! {error, {enoent, Path}}
                         end;
 
                     {error, Error} ->
-                        Callback ! {error, {Error, Path}}
+                        Pid ! {error, {Error, Path}}
                 end
             end, Names),
-            Callback ! {done_path, {dir, Dir}};
+            Pid ! {done_path, {dir, Dir}};
 
         {error, Error} ->
-            Callback ! {error, {Error, Dir}}
+            Pid ! {error, {Error, Dir}}
     end.
 
 -spec is_erlang(file:filename()) -> boolean().
@@ -105,7 +105,7 @@ end.
 
 -spec parse_expr(erl_parse:abstract_expr()) -> ok.
 parse_expr(Expr) -> case Expr of
-    {atom,      L,        A} -> get(callback) ! {atom, A, get(filename), L}, ok;
+    {atom,      L,        A} -> get(pid) ! {atom, A, get(filename), L}, ok;
     {char,      _,        _} -> ok;
     {float,     _,        _} -> ok;
     {integer,   _,        _} -> ok;
@@ -182,7 +182,7 @@ parse_clause({clause, _, Ps, Gs, Es}) ->
 
 -spec parse_pattern(erl_parse:af_pattern()) -> ok.
 parse_pattern(Pattern) -> case Pattern of
-    {atom,    L,         A} -> get(callback) ! {atom, A, get(filename), L}, ok;
+    {atom,    L,         A} -> get(pid) ! {atom, A, get(filename), L}, ok;
     {char,    _,         _} -> ok;
     {float,   _,         _} -> ok;
     {integer, _,         _} -> ok;
@@ -202,7 +202,7 @@ end.
 
 -spec parse_guard(erl_parse:af_guard_test()) -> ok.
 parse_guard(Guard) -> case Guard of
-    {atom,    L,         A} -> get(callback) ! {atom, A, get(filename), L}, ok;
+    {atom,    L,         A} -> get(pid) ! {atom, A, get(filename), L}, ok;
     {char,    _,         _} -> ok;
     {float,   _,         _} -> ok;
     {integer, _,         _} -> ok;
@@ -258,7 +258,7 @@ parse_type(Type) -> case Type of
     {type, _, _,         Ts} -> lists:foreach(fun parse_type/1, Ts);
     {ann_type,    _,     Ts} -> lists:foreach(fun parse_type/1, Ts);
     {remote_type, _,      _} -> ok;
-    {atom,        L,      A} -> get(callback) ! {atom, A, get(filename), L};
+    {atom,        L,      A} -> get(pid) ! {atom, A, get(filename), L};
     {char,        _,      _} -> ok;
     {integer,     _,      _} -> ok;
     {op,          _,   _, _} -> ok;

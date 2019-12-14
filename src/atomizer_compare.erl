@@ -5,46 +5,47 @@
 -export([compare/1]).
 
 -spec compare(pid()) -> ok.
-compare(Callback) ->
-    put(callback, Callback),
+compare(Pid) ->
     ets:new(atoms, [private, named_table, set]),
-    loop(0, false),
-    ets:delete(atoms).
+    Result = loop(Pid, 0, false),
+    ets:delete(atoms),
+    Result.
 
--spec loop(non_neg_integer(), boolean()) -> ok.
-loop(0, true) ->
-    get(callback) ! done_warnings;
+-spec loop(pid(), non_neg_integer(), boolean()) -> ok.
+loop(Pid, 0, true) ->
+    Pid ! done_warnings,
+    ok;
 
-loop(InProgress, DoneAtoms) ->
+loop(Pid, InProgress, DoneAtoms) ->
     receive
         {atom, Atom} ->
             case ets:member(atoms, Atom) of
                 true ->
-                    loop(InProgress, DoneAtoms);
+                    loop(Pid, InProgress, DoneAtoms);
 
                 false ->
                     NrComparisons = compare_all(Atom),
                     ets:insert(atoms, {Atom}),
-                    loop(InProgress + NrComparisons, DoneAtoms)
+                    loop(Pid, InProgress + NrComparisons, DoneAtoms)
             end;
 
         {comparison, Atom, Btom, Result} ->
             case Result of
-                {yes, Reason} -> get(callback) ! {warning, Atom, Btom, Reason};
+                {yes, Reason} -> Pid ! {warning, Atom, Btom, Reason};
                 no -> ok
             end,
-            loop(InProgress - 1, DoneAtoms);
+            loop(Pid, InProgress - 1, DoneAtoms);
 
         done_atoms ->
-            loop(InProgress, true)
+            loop(Pid, InProgress, true)
     end.
 
--spec compare_all(atom()) -> ok.
+-spec compare_all(atom()) -> non_neg_integer().
 compare_all(Atom) ->
     Pid = self(),
-    ets:foldl(fun ({Btom}, Comparisons) ->
+    ets:foldl(fun ({Btom}, NrComparisons) ->
                   spawn_link(fun() -> Pid ! {comparison, Atom, Btom, possible_typo(Atom, Btom)} end),
-                  Comparisons + 1
+                  NrComparisons + 1
               end, 0, atoms).
 
 -spec possible_typo(A :: atom(), B :: atom()) -> {yes, Info :: term()} | no.
