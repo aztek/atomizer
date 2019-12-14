@@ -2,7 +2,7 @@
 
 -include("atomizer.hrl").
 
--export([compare/1, levenshtein/2]).
+-export([compare/1]).
 
 -spec compare(pid()) -> ok.
 compare(Callback) ->
@@ -65,24 +65,3 @@ similar([_ | As], [_ | Bs]) -> As == Bs;
 similar([], [_]) -> true;
 similar([_], []) -> true;
 similar(_, _) -> false.
-
--spec levenshtein(S :: string(), T :: string()) -> Distance :: integer().
-levenshtein(S, T) ->
-    {D, _} = levenshtein(S, T, #{}),
-    D.
-
--spec levenshtein(string(), string(), Cache) -> {Distance, Cache} when
-    Distance :: non_neg_integer(),
-    Cache    :: #{{string(), string()} => Distance}.
-levenshtein([], T, C) -> {length(T), C#{{[], T} => length(T)}};
-levenshtein(S, [], C) -> {length(S), C#{{S, []} => length(S)}};
-levenshtein([X | S], [X | T], C) -> levenshtein(S, T, C);
-levenshtein([_ | ST] = S, [_ | TT] = T, C) ->
-    case maps:find({S, T}, C) of
-        {ok, D} -> {D, C};
-        error   -> {L1, C1} = levenshtein(S, TT, C),
-                   {L2, C2} = levenshtein(ST, T, C1),
-                   {L3, C3} = levenshtein(ST, TT, C2),
-                   L = 1 + lists:min([L1, L2, L3]),
-                   {L, C3#{{S, T} => L}}
-    end.
