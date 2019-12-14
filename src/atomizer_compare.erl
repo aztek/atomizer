@@ -1,14 +1,17 @@
 -module(atomizer_compare).
 
+-include("atomizer.hrl").
+
 -export([compare/1, levenshtein/2]).
 
+-spec compare(pid()) -> ok.
 compare(Callback) ->
     put(callback, Callback),
     ets:new(atoms, [private, named_table, set]),
-    Result = loop(0, false),
-    ets:delete(atoms),
-    Result.
+    loop(0, false),
+    ets:delete(atoms).
 
+-spec loop(non_neg_integer(), boolean()) -> ok.
 loop(0, true) ->
     get(callback) ! done_warnings;
 
@@ -36,6 +39,7 @@ loop(InProgress, DoneAtoms) ->
             loop(InProgress, true)
     end.
 
+-spec compare_all(atom()) -> ok.
 compare_all(Atom) ->
     Pid = self(),
     ets:foldl(fun ({Btom}, Comparisons) ->

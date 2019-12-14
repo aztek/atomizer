@@ -1,13 +1,10 @@
 -module(atomizer_parse).
 
+-include("atomizer.hrl").
+
 -include_lib("kernel/include/file.hrl").
 
 -define(ERLANG_EXTENSIONS, [".erl", ".hrl"]).
-
--export_type([path/0]).
-
--type path() :: {erl, file:filename()}
-              | {dir, file:filename()}.
 
 -export([parse_path/2]).
 
@@ -63,6 +60,7 @@ parse_path(Callback, {dir, Dir}) ->
 is_erlang(FileName) ->
     lists:any(fun (Ext) -> lists:suffix(Ext, FileName) end, ?ERLANG_EXTENSIONS).
 
+-spec parse_epp(epp:epp_handle()) -> ok.
 parse_epp(Epp) ->
     case epp:parse_erl_form(Epp) of
         {ok, Form} ->

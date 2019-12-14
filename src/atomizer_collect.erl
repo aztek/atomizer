@@ -1,11 +1,14 @@
 -module(atomizer_collect).
 
+-include("atomizer.hrl").
+
 -include_lib("kernel/include/file.hrl").
 
 -define(OPEN_FILE_LIMIT, 10).
 
 -export([collect/2]).
 
+-spec collect(pid(), source()) -> ok | {error, term()}.
 collect(Callback, Source) ->
     put(callback, Callback),
     Queue = case Source of
@@ -16,13 +19,14 @@ collect(Callback, Source) ->
             end,
     loop(sets:new(), queue:from_list(Queue)).
 
--spec loop(Pool, Queue) -> ok when
+-spec loop(Pool, Queue) -> ok | {error, term()} when
     Pool  :: sets:set(atomizer_parse:path()),
     Queue :: queue:queue(atomizer_parse:path()).
 loop(Pool, Queue) ->
     case {sets:size(Pool), queue:len(Queue)} of
         {0, 0} ->
-            get(callback) ! done_atoms;
+            get(callback) ! done_atoms,
+            ok;
 
         {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_FILE_LIMIT, QueueSize > 0 ->
             {{value, Path}, TailQueue} = queue:out(Queue),

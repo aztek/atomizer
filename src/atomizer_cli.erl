@@ -1,5 +1,7 @@
 -module(atomizer_cli).
 
+-include("atomizer.hrl").
+
 -export([
     main/1,
     run/3
@@ -9,7 +11,7 @@
 main(_CmdArgs) ->
     run(warn, {dirs, ["."]}, true).
 
--spec run(list | show | warn, atomizer:source(), boolean()) -> ok.
+-spec run(list | show | warn, source(), boolean()) -> ok.
 run(Action, Source, Verbose) ->
     AtomsTable = ets:new(atoms, [public, bag]),
     WarningsTable = ets:new(warnings, [public, set]),
@@ -64,7 +66,7 @@ show_atom(Atom, AtomsTable, Verbose) ->
                   lists:reverse(lists:keysort(3, Info))),
     io:format("~n").
 
--spec show_location(file:filename(), non_neg_integer() | [atomizer:position()]) -> ok.
+-spec show_location(file:filename(), non_neg_integer() | [position()]) -> ok.
 show_location(Filename, NrPositions) when is_integer(NrPositions) ->
     io:format("~s (~w ~s)~n",
               [Filename, NrPositions, plural(NrPositions, "occurrence", "occurrences")]);
