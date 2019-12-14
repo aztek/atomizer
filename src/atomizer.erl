@@ -2,34 +2,36 @@
 
 -include("atomizer.hrl").
 
--export([atomize/3]).
+-export([atomize/1]).
 
--spec atomize(source(), ets:tid(), ets:tid()) -> ok | {error, term()}.
-atomize(Source, AtomsTable, WarningsTable) ->
-    put(atoms_table, AtomsTable),
-    put(warnings_table, WarningsTable),
+-spec atomize(source()) -> {ok, atoms(), warnings()} | {error, term()}.
+atomize(Source) ->
     put(comparison, spawn_link(atomizer_compare, compare, [self()])),
     spawn_link(atomizer_collect, collect, [self(), Source]),
-    loop().
+    loop(maps:new(), sets:new()).
 
--spec loop() -> ok | {error, atom()}.
-loop() ->
+-spec loop(atoms(), warnings()) -> {ok, atoms(), warnings()} | {error, atom()}.
+loop(Atoms, Warnings) ->
     receive
         {atom, Atom, File, Position} ->
             get(comparison) ! {atom, Atom},
-            ets:insert(get(atoms_table), {Atom, {File, Position}}),
-            loop();
+            Locations = maps:get(Atom, Atoms, maps:new()),
+            Positions = maps:get(File, Locations, sets:new()),
+            UpdatedPositions = sets:add_element(Position, Positions),
+            UpdatedLocations = maps:put(File, UpdatedPositions, Locations),
+            UpdatedAtoms = maps:put(Atom, UpdatedLocations, Atoms),
+            loop(UpdatedAtoms, Warnings);
 
         done_atoms ->
             get(comparison) ! done_atoms,
-            loop();
+            loop(Atoms, Warnings);
 
         {warning, Atom, Btom, _} ->
-            ets:insert(get(warnings_table), {{Atom, Btom}}),
-            loop();
+            UpdatedWarnings = sets:add_element({Atom, Btom}, Warnings),
+            loop(Atoms, UpdatedWarnings);
 
         done_warnings ->
-            ok;
+            {ok, Atoms, Warnings};
 
         {error, Error} ->
             {error, Error}
