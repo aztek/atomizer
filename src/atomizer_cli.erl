@@ -9,7 +9,7 @@
 
 -spec main([string()]) -> ok.
 main(_CmdArgs) ->
-    run(warn, {dirs, ["."]}, true).
+    run(warn, {dirs, ["."]}, false).
 
 -spec run(list | show | warn, source(), boolean()) -> ok.
 run(Action, Source, Verbose) ->
@@ -43,12 +43,11 @@ show_atom(Atom, Locations, Verbose) ->
     Info = [{filename:absname(File), Positions, sets:size(Positions)} ||
             {File, Positions} <- maps:to_list(Locations)],
     lists:foreach(fun ({File, Positions, NrPositions}) ->
-                      case Verbose of
-                          true  -> show_location(File, Positions);
-                          false -> show_location(File, NrPositions)
-                      end
-                  end,
-                  lists:keysort(3, Info)),
+        case Verbose of
+            true  -> show_location(File, Positions);
+            false -> show_location(File, NrPositions)
+        end
+    end, lists:reverse(lists:keysort(3, Info))),
     io:format("~n").
 
 -spec show_location(file:filename(), non_neg_integer() | [position()]) -> ok.
@@ -73,7 +72,7 @@ warn_atoms(Atoms, Warnings, Verbose) ->
 plural(1, Singular, _) -> Singular;
 plural(_, _, Plural)   -> Plural.
 
--spec warn_atom(atomizer:atoms(), Warning :: {atom(), atom()}, Verbose :: boolean()) -> ok.
+-spec warn_atom(atoms(), warning(), boolean()) -> ok.
 warn_atom(Atoms, {A, B}, Verbose) ->
     io:format("Possible typo: ~w vs ~w~n~n", [A, B]),
     show_atom(A, maps:get(A, Atoms), Verbose),

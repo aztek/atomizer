@@ -44,9 +44,9 @@ loop(Pid, InProgress, DoneAtoms) ->
 compare_all(Atom) ->
     Pid = self(),
     ets:foldl(fun ({Btom}, NrComparisons) ->
-                  spawn_link(fun() -> Pid ! {comparison, Atom, Btom, possible_typo(Atom, Btom)} end),
-                  NrComparisons + 1
-              end, 0, atoms).
+        spawn_link(fun() -> Pid ! {comparison, Atom, Btom, possible_typo(Atom, Btom)} end),
+        NrComparisons + 1
+    end, 0, atoms).
 
 -spec possible_typo(A :: atom(), B :: atom()) -> {yes, Info :: term()} | no.
 possible_typo(A, B) ->

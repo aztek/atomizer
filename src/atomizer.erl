@@ -10,7 +10,7 @@ atomize(Source) ->
     spawn_link(atomizer_collect, collect, [self(), Source]),
     loop(Pid, maps:new(), sets:new()).
 
--spec loop(pid(), atoms(), warnings()) -> {ok, atoms(), warnings()} | {error, atom()}.
+-spec loop(pid(), atoms(), warnings()) -> {ok, atoms(), warnings()} | {error, term()}.
 loop(Pid, Atoms, Warnings) ->
     receive
         {atom, Atom, File, Position} ->
