@@ -14,11 +14,11 @@ main(_CmdArgs) ->
 -spec run(list | show | warn, source(), boolean()) -> ok.
 run(Action, Source, Verbose) ->
     case atomizer:atomize(Source) of
-        {ok, Atoms, Warnings} ->
+        {ok, Atoms, Warnings, NrParsed} ->
             case Action of
                 list -> list_atoms(Atoms);
                 show -> show_atoms(Atoms, Verbose);
-                warn -> warn_atoms(Atoms, Warnings, Verbose)
+                warn -> warn_atoms(Atoms, Warnings, NrParsed, Verbose)
             end;
 
         {error, Error} ->
@@ -59,13 +59,14 @@ show_location(Filename, Positions) ->
     lists:foreach(fun (Position) -> io:format("~s:~w~n", [Filename, Position]) end,
                   lists:sort(sets:to_list(Positions))).
 
--spec warn_atoms(atoms(), warnings(), boolean()) -> ok.
-warn_atoms(Atoms, Warnings, Verbose) ->
+-spec warn_atoms(atoms(), warnings(), non_neg_integer(), boolean()) -> ok.
+warn_atoms(Atoms, Warnings, NrParsed, Verbose) ->
     NrAtoms = maps:size(Atoms),
     NrWarnings = sets:size(Warnings),
-    io:format("Found ~p ~s in ~p ~s~n",
+    io:format("Found ~p ~s among ~p ~s in ~p ~s.~n",
               [NrWarnings, plural(NrWarnings, "warning", "warnings"),
-               NrAtoms,    plural(NrAtoms,    "atom",     "atoms")]),
+               NrAtoms,    plural(NrAtoms,    "atom",     "atoms"),
+               NrParsed,   plural(NrParsed,   "file",     "files")]),
     lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning, Verbose) end,
                   lists:sort(sets:to_list(Warnings))).
 

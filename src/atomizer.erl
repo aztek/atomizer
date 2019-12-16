@@ -8,24 +8,24 @@
 atomize(Source) ->
     Pid = spawn_link(atomizer_compare, compare, [self()]),
     spawn_link(atomizer_collect, collect, [self(), Source]),
-    loop(Pid, maps:new(), sets:new()).
+    loop(Pid, maps:new(), sets:new(), -1).
 
--spec loop(pid(), atoms(), warnings()) -> {ok, atoms(), warnings()} | {error, term()}.
-loop(Pid, Atoms, Warnings) ->
+-spec loop(pid(), atoms(), warnings(), integer()) -> {ok, atoms(), warnings(), non_neg_integer()} | {error, term()}.
+loop(Pid, Atoms, Warnings, NrParsed) ->
     receive
         {atom, Atom, File, Position} ->
             Pid ! {atom, Atom},
-            loop(Pid, add_atom_location(Atom, File, Position, Atoms), Warnings);
+            loop(Pid, add_atom_location(Atom, File, Position, Atoms), Warnings, NrParsed);
 
-        done_atoms ->
+        {done_atoms, ActualNrParsed} ->
             Pid ! done_atoms,
-            loop(Pid, Atoms, Warnings);
+            loop(Pid, Atoms, Warnings, ActualNrParsed);
 
         {warning, Atom, Btom, _} ->
-            loop(Pid, Atoms, sets:add_element({Atom, Btom}, Warnings));
+            loop(Pid, Atoms, sets:add_element({Atom, Btom}, Warnings), NrParsed);
 
         done_warnings ->
-            {ok, Atoms, Warnings};
+            {ok, Atoms, Warnings, NrParsed};
 
         {error, Error} ->
             {error, Error}
