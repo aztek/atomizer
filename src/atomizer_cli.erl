@@ -42,12 +42,21 @@ show_atom(Atom, Locations, Verbose) ->
     io:format("~p~n", [Atom]),
     Info = [{filename:absname(File), Positions, sets:size(Positions)} ||
             {File, Positions} <- maps:to_list(Locations)],
-    lists:foreach(fun ({File, Positions, NrPositions}) ->
+    ShowLocation = fun ({File, Positions, NrPositions}) ->
         case Verbose of
             true  -> show_location(File, Positions);
             false -> show_location(File, NrPositions)
         end
-    end, lists:reverse(lists:keysort(3, Info))),
+    end,
+    Files = lists:reverse(lists:keysort(3, Info)),
+    PreviewLength = 4,
+    case {Verbose, length(Files)} of
+        {false, NrFiles} when NrFiles > PreviewLength + 1 ->
+            lists:foreach(ShowLocation, lists:sublist(Files, PreviewLength)),
+            io:format("(~p more)~n", [NrFiles - PreviewLength]);
+        _ ->
+            lists:foreach(ShowLocation, Files)
+    end,
     io:format("~n").
 
 -spec show_location(file:filename(), non_neg_integer() | [position()]) -> ok.
