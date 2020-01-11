@@ -39,7 +39,7 @@ show_atoms(Atoms, Verbose) ->
 
 -spec show_atom(atom(), locations(), boolean()) -> ok.
 show_atom(Atom, Locations, Verbose) ->
-    io:format("\e[1m~p\e[00m~n", [Atom]),
+    io:format("~n\e[1m~p\e[00m~n", [Atom]),
     Info = [{filename:absname(File), Positions, sets:size(Positions)} ||
             {File, Positions} <- maps:to_list(Locations)],
     ShowLocation = fun ({File, Positions, NrPositions}) ->
@@ -56,8 +56,7 @@ show_atom(Atom, Locations, Verbose) ->
             io:format("(~p more)~n", [NrFiles - PreviewLength]);
         _ ->
             lists:foreach(ShowLocation, Files)
-    end,
-    io:format("~n").
+    end.
 
 -spec show_location(file:filename(), non_neg_integer() | [position()]) -> ok.
 show_location(Filename, NrPositions) when is_integer(NrPositions) ->
@@ -72,7 +71,8 @@ show_location(Filename, Positions) ->
 warn_atoms(Atoms, Warnings, NrParsed, Verbose) ->
     NrAtoms = maps:size(Atoms),
     NrWarnings = sets:size(Warnings),
-    io:format("Found ~p suspicious ~s of atoms among ~p ~s in ~p ~s.~n~n",
+    io:format("Found \e[1m~p\e[00m suspicious ~s of atoms among "
+              "the total of \e[1m~p\e[00m ~s in \e[1m~p\e[00m ~s.~n",
               [NrWarnings, plural(NrWarnings, "pair", "pairs"),
                NrAtoms,    plural(NrAtoms,    "atom", "atoms"),
                NrParsed,   plural(NrParsed,   "file", "files")]),
@@ -84,6 +84,7 @@ plural(_, _, Plural)   -> Plural.
 
 -spec warn_atom(atoms(), warning(), boolean()) -> ok.
 warn_atom(Atoms, {A, B}, Verbose) ->
-    io:format("Atoms \e[1m~p\e[00m and \e[1m~p\e[00m are suspiciously similar.~n~n", [A, B]),
+    io:format("~n-~n", []),
+    io:format("~nAtoms \e[1m~p\e[00m and \e[1m~p\e[00m are suspiciously similar.~n", [A, B]),
     show_atom(A, maps:get(A, Atoms), Verbose),
     show_atom(B, maps:get(B, Atoms), Verbose).
