@@ -39,7 +39,7 @@ show_atoms(Atoms, Verbose) ->
 
 -spec show_atom(atom(), locations(), boolean()) -> ok.
 show_atom(Atom, Locations, Verbose) ->
-    io:format("~p~n", [Atom]),
+    io:format("\e[1m~p\e[00m~n", [Atom]),
     Info = [{filename:absname(File), Positions, sets:size(Positions)} ||
             {File, Positions} <- maps:to_list(Locations)],
     ShowLocation = fun ({File, Positions, NrPositions}) ->
@@ -72,10 +72,10 @@ show_location(Filename, Positions) ->
 warn_atoms(Atoms, Warnings, NrParsed, Verbose) ->
     NrAtoms = maps:size(Atoms),
     NrWarnings = sets:size(Warnings),
-    io:format("Found ~p ~s among ~p ~s in ~p ~s.~n",
-              [NrWarnings, plural(NrWarnings, "warning", "warnings"),
-               NrAtoms,    plural(NrAtoms,    "atom",     "atoms"),
-               NrParsed,   plural(NrParsed,   "file",     "files")]),
+    io:format("Found ~p suspicious ~s of atoms among ~p ~s in ~p ~s.~n~n",
+              [NrWarnings, plural(NrWarnings, "pair", "pairs"),
+               NrAtoms,    plural(NrAtoms,    "atom", "atoms"),
+               NrParsed,   plural(NrParsed,   "file", "files")]),
     lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning, Verbose) end,
                   lists:sort(sets:to_list(Warnings))).
 
@@ -84,6 +84,6 @@ plural(_, _, Plural)   -> Plural.
 
 -spec warn_atom(atoms(), warning(), boolean()) -> ok.
 warn_atom(Atoms, {A, B}, Verbose) ->
-    io:format("Possible typo: ~w vs ~w~n~n", [A, B]),
+    io:format("Atoms \e[1m~p\e[00m and \e[1m~p\e[00m are suspiciously similar.~n~n", [A, B]),
     show_atom(A, maps:get(A, Atoms), Verbose),
     show_atom(B, maps:get(B, Atoms), Verbose).
