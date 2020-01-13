@@ -42,7 +42,7 @@ parse_path(Pid, {dir, Dir}) ->
                     {error, enoent} ->
                         % Error because Path is a symlink?
                         case file:read_link_all(Path) of
-                            {ok, _}    -> io:format("Warning: skipping symbolic link ~s~n", [Path]);
+                            {ok, _}    -> io:format("\e[33mWarning: Skipping symbolic link ~s\e[00m~n", [Path]);
                             {error, _} -> Pid ! {error, {enoent, Path}}
                         end;
 
@@ -69,8 +69,8 @@ parse_epp(Epp) ->
 
         {eof, _} -> ok;
 
-        {warning, Info} ->
-            io:format("Warning (~s): ~w~n", [get(filename), Info]),
+        {warning, {Line, Module, Warning}} ->
+            io:format("\e[33mWarning: Skipping ~s, unable to parse line ~p: ~s\e[00m~n", [get(filename), Line, Module:format_error(Warning)]),
             parse_epp(Epp);
 
         {error, {_, epp, {include, file, _}}} ->
@@ -79,8 +79,8 @@ parse_epp(Epp) ->
         {error, {_, epp, {undefined, _, _}}} ->
             parse_epp(Epp);
 
-        {error, Info} ->
-            io:format("Error (~s): ~w~n", [get(filename), Info]),
+        {error, {Line, Module, Error}} ->
+            io:format("\e[33mWarning: Skipping ~s, unable to parse line ~p: ~s\e[00m~n", [get(filename), Line, Module:format_error(Error)]),
             parse_epp(Epp)
     end.
 

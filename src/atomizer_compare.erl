@@ -47,4 +47,4 @@ loop(Pid, DoneAtoms) ->
     end.
 
 insignificant(Atom) ->
-    length(atom_to_list(Atom)) == 1.
+    length(atom_to_list(Atom)) =< 2.

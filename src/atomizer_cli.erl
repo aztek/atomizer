@@ -2,23 +2,38 @@
 
 -include("atomizer.hrl").
 
+-type action() :: list | show | warn.
+-type verbosity() :: 0 | 1 | 2. % 0 is least verbose, 2 is most verbose
+
+-define(DEFAULT_ACTION, warn).
+-define(DEFAULT_SOURCE, {dir, "."}).
+-define(DEFAULT_VERBOSITY, 1).
+
 -export([
     main/1,
+    run/1,
+    run/2,
     run/3
 ]).
 
 -spec main([string()]) -> ok.
 main(_CmdArgs) ->
-    run(warn, {dirs, ["."]}, false).
+    run(?DEFAULT_SOURCE).
 
--spec run(list | show | warn, source(), boolean()) -> ok.
-run(Action, Source, Verbose) ->
+-spec run(source()) -> ok.
+run(Source) -> run(?DEFAULT_ACTION, Source, ?DEFAULT_VERBOSITY).
+
+-spec run(action(), source()) -> ok.
+run(Action, Source) -> run(Action, Source, ?DEFAULT_VERBOSITY).
+
+-spec run(action(), source(), verbosity()) -> ok.
+run(Action, Source, Verbosity) ->
     case atomizer:atomize(Source) of
         {ok, Atoms, Warnings, NrParsed} ->
             case Action of
                 list -> list_atoms(Atoms);
-                show -> show_atoms(Atoms, Verbose);
-                warn -> warn_atoms(Atoms, Warnings, NrParsed, Verbose)
+                show -> show_atoms(Atoms, Verbosity);
+                warn -> warn_atoms(Atoms, Warnings, NrParsed, Verbosity)
             end;
 
         {error, Error} ->
@@ -32,59 +47,57 @@ list_atoms(Atoms) ->
         Keys -> lists:foreach(fun (Atom) -> io:format("~p~n", [Atom]) end, Keys)
     end.
 
--spec show_atoms(atoms(), boolean()) -> ok.
-show_atoms(Atoms, Verbose) ->
-    lists:foreach(fun (Atom) -> show_atom(Atom, maps:get(Atom, Atoms), Verbose) end,
+-spec show_atoms(atoms(), verbosity()) -> ok.
+show_atoms(Atoms, Verbosity) ->
+    lists:foreach(fun (Atom) -> show_atom(Atom, maps:get(Atom, Atoms), Verbosity) end,
                   lists:sort(maps:keys(Atoms))).
 
--spec show_atom(atom(), locations(), boolean()) -> ok.
-show_atom(Atom, Locations, Verbose) ->
-    io:format("~n\e[1m~p\e[00m~n", [Atom]),
-    Info = [{filename:absname(File), Positions, sets:size(Positions)} ||
-            {File, Positions} <- maps:to_list(Locations)],
-    ShowLocation = fun ({File, Positions, NrPositions}) ->
-        case Verbose of
-            true  -> show_location(File, Positions);
-            false -> show_location(File, NrPositions)
-        end
-    end,
-    Files = lists:reverse(lists:keysort(3, Info)),
+show_abridged_list(Printer, List, Verbosity) ->
     PreviewLength = 4,
-    case {Verbose, length(Files)} of
-        {false, NrFiles} when NrFiles > PreviewLength + 1 ->
-            lists:foreach(ShowLocation, lists:sublist(Files, PreviewLength)),
-            io:format("(~p more)~n", [NrFiles - PreviewLength]);
+    case length(List) of
+        ListLength when Verbosity =< 1, ListLength > PreviewLength + 1 ->
+            lists:foreach(Printer, lists:sublist(List, PreviewLength)),
+            io:format("\e[3m... (~p more)\e[00m~n", [ListLength - PreviewLength]);
         _ ->
-            lists:foreach(ShowLocation, Files)
+            lists:foreach(Printer, List)
     end.
 
--spec show_location(file:filename(), non_neg_integer() | [position()]) -> ok.
-show_location(Filename, NrPositions) when is_integer(NrPositions) ->
-    io:format("~s (~w ~s)~n",
-              [Filename, NrPositions, plural(NrPositions, "occurrence", "occurrences")]);
+-spec show_atom(atom(), locations(), verbosity()) -> ok.
+show_atom(Atom, Locations, Verbosity) ->
+    io:format("~n\e[1m~p\e[00m~n", [Atom]),
+    Info = [{filename:absname(File), lists:sort(sets:to_list(Positions)), sets:size(Positions)} ||
+            {File, Positions} <- maps:to_list(Locations)],
+    Files = lists:reverse(lists:keysort(3, Info)),
+    ShowLocation = fun ({File, Positions, NrPositions}) -> show_location(File, Positions, NrPositions, Verbosity) end,
+    show_abridged_list(ShowLocation, Files, Verbosity).
 
-show_location(Filename, Positions) ->
-    lists:foreach(fun (Position) -> io:format("~s:~w~n", [Filename, Position]) end,
-                  lists:sort(sets:to_list(Positions))).
+-spec show_location(file:filename(), [position()], non_neg_integer(), verbosity()) -> ok.
+show_location(File, Positions, _, Verbosity) when Verbosity >= 1 ->
+    ShowPosition = fun (Position) -> io:format("~s:~w~n", [File, Position]) end,
+    show_abridged_list(ShowPosition, Positions, Verbosity);
 
--spec warn_atoms(atoms(), warnings(), non_neg_integer(), boolean()) -> ok.
-warn_atoms(Atoms, Warnings, NrParsed, Verbose) ->
+show_location(File, _, NrPositions, _) ->
+    io:format("~s \e[3m(~w ~s)\e[00m~n",
+              [File, NrPositions, plural(NrPositions, "occurrence", "occurrences")]).
+
+-spec warn_atoms(atoms(), warnings(), non_neg_integer(), verbosity()) -> ok.
+warn_atoms(Atoms, Warnings, NrParsed, Verbosity) ->
     NrAtoms = maps:size(Atoms),
     NrWarnings = sets:size(Warnings),
-    io:format("Found \e[1m~p\e[00m suspicious ~s of atoms among "
+    lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning, Verbosity) end,
+                  lists:sort(sets:to_list(Warnings))),
+    io:format("Found \e[1m~p\e[00m ~s of similar atoms among "
               "the total of \e[1m~p\e[00m ~s in \e[1m~p\e[00m ~s.~n",
               [NrWarnings, plural(NrWarnings, "pair", "pairs"),
                NrAtoms,    plural(NrAtoms,    "atom", "atoms"),
-               NrParsed,   plural(NrParsed,   "file", "files")]),
-    lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning, Verbose) end,
-                  lists:sort(sets:to_list(Warnings))).
-
+               NrParsed,   plural(NrParsed,   "file", "files")]).
+ 
 plural(1, Singular, _) -> Singular;
 plural(_, _, Plural)   -> Plural.
 
--spec warn_atom(atoms(), warning(), boolean()) -> ok.
-warn_atom(Atoms, {A, B}, Verbose) ->
-    io:format("~n-~n", []),
-    io:format("~nAtoms \e[1m~p\e[00m and \e[1m~p\e[00m are suspiciously similar.~n", [A, B]),
-    show_atom(A, maps:get(A, Atoms), Verbose),
-    show_atom(B, maps:get(B, Atoms), Verbose).
+-spec warn_atom(atoms(), warning(), verbosity()) -> ok.
+warn_atom(Atoms, {A, B}, Verbosity) ->
+    io:format("\e[36m\e[1m~p\e[00m\e[36m vs \e[1m~p\e[00m~n", [A, B]),
+    show_atom(A, maps:get(A, Atoms), Verbosity),
+    show_atom(B, maps:get(B, Atoms), Verbosity),
+    io:format("~n~n", []).
