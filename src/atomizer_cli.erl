@@ -1,33 +1,28 @@
 -module(atomizer_cli).
 
+-export([
+    main/1,
+    run/1,
+    run/2
+]).
+
 -include("atomizer.hrl").
 
 -type action() :: list | show | warn.
 -type verbosity() :: 0 | 1 | 2. % 0 is least verbose, 2 is most verbose
 
--define(DEFAULT_ACTION, warn).
--define(DEFAULT_SOURCE, {dir, "."}).
--define(DEFAULT_VERBOSITY, 1).
-
--export([
-    main/1,
-    run/1,
-    run/2,
-    run/3
-]).
+-record(options, {
+    action = warn :: action(),
+    source :: source(),
+    verbosity = 1 :: verbosity()
+}).
 
 -spec main([string()]) -> ok.
 main(_CmdArgs) ->
-    run(?DEFAULT_SOURCE).
+    run({dir, "."}).
 
--spec run(source()) -> ok.
-run(Source) -> run(?DEFAULT_ACTION, Source, ?DEFAULT_VERBOSITY).
-
--spec run(action(), source()) -> ok.
-run(Action, Source) -> run(Action, Source, ?DEFAULT_VERBOSITY).
-
--spec run(action(), source(), verbosity()) -> ok.
-run(Action, Source, Verbosity) ->
+-spec run(#options{} | source()) -> ok.
+run(#options{action = Action, source = Source, verbosity = Verbosity}) ->
     case atomizer:atomize(Source) of
         {ok, Atoms, Warnings, NrParsed} ->
             case Action of
@@ -38,7 +33,12 @@ run(Action, Source, Verbosity) ->
 
         {error, Error} ->
             io:format(standard_error, "Error: ~p~n", [Error])
-    end.
+    end;
+
+run(Source) -> run(#options{source = Source}).
+
+-spec run(action(), source()) -> ok.
+run(Action, Source) -> run(#options{action = Action, source = Source}).
 
 -spec list_atoms(atoms()) -> ok.
 list_atoms(Atoms) ->
