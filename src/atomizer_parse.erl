@@ -129,6 +129,7 @@ parse_expr(Expr) -> case Expr of
     {map,       _,       As} -> lists:foreach(fun parse_assoc/1, As);
     {map,       _, E,    As} -> parse_expr(E), lists:foreach(fun parse_assoc/1, As);
     {'catch',   _, E       } -> parse_expr(E);
+    {call,    _, {atom, _, is_record}, _} -> ok;
     {call,      _, {atom, _, _}, Es} -> lists:foreach(fun parse_expr/1, Es);
     {call,      _, E,    Es} -> lists:foreach(fun parse_expr/1, [E | Es]);
     {lc,        _,    T, Qs} -> parse_expr(T), lists:foreach(fun parse_qualifier/1, Qs);
@@ -217,6 +218,7 @@ parse_guard(Guard) -> case Guard of
     {record,  _,     _, Fs} -> lists:foreach(fun parse_record_field_guard/1, Fs);
     {map,     _,        As} -> lists:foreach(fun parse_assoc/1, As);
     {map,     _,     G, As} -> parse_guard(G), lists:foreach(fun parse_assoc/1, As);
+    {call,    _, {atom, _, is_record}, _} -> ok;
     {call,    _,     _, Gs} -> lists:foreach(fun parse_guard/1, Gs);
     {record_index, _,    _, _} -> ok;
     {record_field, _, G, _, _} -> parse_guard(G)
