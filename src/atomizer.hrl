@@ -25,4 +25,4 @@
 -type warning()   :: {atom(), atom()}.
 -type warnings()  :: sets:set(warning()).
 
--type normal_form() :: nonempty_list(atom()).
+-type normal_form() :: atom().
