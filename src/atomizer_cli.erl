@@ -61,7 +61,7 @@ list_atom(Atom, Locations, Verbosity) ->
     NrOccurrences = nr_occurrences(Locations),
     if
         Verbosity > 1 ->
-            NrFiles = maps:size(Locations),
+            NrFiles = nr_files(Locations),
             io:format("~p\t~p\t~p~n", [Atom, NrOccurrences, NrFiles]);
 
         true ->
@@ -125,10 +125,23 @@ warn_atom(Atoms, {A, B}, Verbosity) ->
 
 -spec is_significant(atoms(), warning()) -> boolean().
 is_significant(Atoms, {A, B}) ->
-    NrOccurrenceA = nr_occurrences(maps:get(A, Atoms)),
-    NrOccurrenceB = nr_occurrences(maps:get(B, Atoms)),
-    (NrOccurrenceA == 1 andalso NrOccurrenceB > 1) orelse
-    (NrOccurrenceA > 1 andalso NrOccurrenceB == 1).
+    LocationsA = maps:get(A, Atoms),
+    LocationsB = maps:get(B, Atoms),
+    NrOccurrenceA = nr_occurrences(LocationsA),
+    NrOccurrenceB = nr_occurrences(LocationsB),
+    {Typo, Min, Max} =
+        if
+             NrOccurrenceA < NrOccurrenceB -> {A, NrOccurrenceA, NrOccurrenceB};
+             true -> {B, NrOccurrenceB, NrOccurrenceA}
+        end,
+    Disproportion = 4,
+    Disproportional = Max / Min > Disproportion,
+    Local = nr_files(maps:get(Typo, Atoms)) == 1,
+    Related = not sets:is_disjoint(sets:from_list(maps:keys(LocationsA)), sets:from_list(maps:keys(LocationsB))),
+    Disproportional andalso Local andalso Related.
+
+-spec nr_files(locations()) -> non_neg_integer().
+nr_files(Locations) -> maps:size(Locations).
 
 -spec nr_occurrences(locations()) -> non_neg_integer().
 nr_occurrences(Locations) ->
