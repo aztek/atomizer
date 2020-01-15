@@ -25,7 +25,7 @@ main(_CmdArgs) ->
             halt(0);
 
         {error, {Module, Error}} ->
-            ?ERROR("~p", [Module:format_error(Error)]),
+            ?ERROR("~s", [Module:format_error(Error)]),
             halt(1)
     end.
 
