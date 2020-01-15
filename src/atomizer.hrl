@@ -19,7 +19,7 @@
               | {dir, file:filename()}.
 
 -type location()  :: {file:filename(), position()}.
--type locations() :: multimaps:multimap(file:filename(), position()).
+-type locations() :: #{file:filename() => sets:set(position())}.
 -type atoms()     :: #{atom() => locations()}.
 -type warning()   :: {atom(), atom()}.
 -type warnings()  :: sets:set(warning()).

@@ -3,7 +3,8 @@
 -export([
     main/1,
     run/1,
-    run/2
+    run/2,
+    run/3
 ]).
 
 -include("atomizer.hrl").
@@ -26,7 +27,7 @@ run(#options{action = Action, source = Source, verbosity = Verbosity}) ->
     case atomizer:atomize(Source) of
         {ok, Atoms, Warnings, NrParsed} ->
             case Action of
-                list -> list_atoms(Atoms);
+                list -> list_atoms(Atoms, Verbosity);
                 show -> show_atoms(Atoms, Verbosity);
                 warn -> warn_atoms(Atoms, Warnings, NrParsed, Verbosity)
             end;
@@ -35,16 +36,35 @@ run(#options{action = Action, source = Source, verbosity = Verbosity}) ->
             io:format(standard_error, "Error: ~p~n", [Error])
     end;
 
-run(Source) -> run(#options{source = Source}).
+run(Source) ->
+    run(#options{source = Source}).
 
 -spec run(action(), source()) -> ok.
-run(Action, Source) -> run(#options{action = Action, source = Source}).
+run(Action, Source) ->
+    run(#options{action = Action, source = Source}).
 
--spec list_atoms(atoms()) -> ok.
-list_atoms(Atoms) ->
+-spec run(action(), source(), verbosity()) -> ok.
+run(Action, Source, Verbosity) ->
+    run(#options{action = Action, source = Source, verbosity = Verbosity}).
+
+-spec list_atoms(atoms(), verbosity()) -> ok.
+list_atoms(Atoms, Verbosity) ->
     case lists:sort(maps:keys(Atoms)) of
-        []   -> io:format("No atoms~n", []);
-        Keys -> lists:foreach(fun (Atom) -> io:format("~p~n", [Atom]) end, Keys)
+        [] when Verbosity > 1 -> io:format("No atoms found.~n", []);
+        [] -> ok;
+        Keys -> lists:foreach(fun (Atom) -> list_atom(Atom, maps:get(Atom, Atoms), Verbosity) end, Keys)
+    end.
+
+-spec list_atom(atom(), locations(), verbosity()) -> ok.
+list_atom(Atom, Locations, Verbosity) ->
+    NrOccurrences = maps:fold(fun (_, V, S) -> sets:size(V) + S end, 0, Locations),
+    if
+        Verbosity > 1 ->
+            NrFiles = maps:size(Locations),
+            io:format("~p\t~p\t~p~n", [Atom, NrOccurrences, NrFiles]);
+
+        true ->
+            io:format("~p\t~p~n", [Atom, NrOccurrences])
     end.
 
 -spec show_atoms(atoms(), verbosity()) -> ok.
