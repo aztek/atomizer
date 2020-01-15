@@ -26,10 +26,11 @@ main(_CmdArgs) ->
 run(#options{action = Action, source = Source, verbosity = Verbosity}) ->
     case atomizer:atomize(Source) of
         {ok, Atoms, Warnings, NrParsed} ->
+            SignificantWarnings = sets:filter(fun (Warning) -> is_significant(Atoms, Warning) end, Warnings),
             case Action of
                 list -> list_atoms(Atoms, Verbosity);
                 show -> show_atoms(Atoms, Verbosity);
-                warn -> warn_atoms(Atoms, Warnings, NrParsed, Verbosity)
+                warn -> warn_atoms(Atoms, SignificantWarnings, NrParsed, Verbosity)
             end;
 
         {error, Error} ->
@@ -57,7 +58,7 @@ list_atoms(Atoms, Verbosity) ->
 
 -spec list_atom(atom(), locations(), verbosity()) -> ok.
 list_atom(Atom, Locations, Verbosity) ->
-    NrOccurrences = maps:fold(fun (_, V, S) -> sets:size(V) + S end, 0, Locations),
+    NrOccurrences = nr_occurrences(Locations),
     if
         Verbosity > 1 ->
             NrFiles = maps:size(Locations),
@@ -121,3 +122,14 @@ warn_atom(Atoms, {A, B}, Verbosity) ->
     show_atom(A, maps:get(A, Atoms), Verbosity),
     show_atom(B, maps:get(B, Atoms), Verbosity),
     io:format("~n~n", []).
+
+-spec is_significant(atoms(), warning()) -> boolean().
+is_significant(Atoms, {A, B}) ->
+    NrOccurrenceA = nr_occurrences(maps:get(A, Atoms)),
+    NrOccurrenceB = nr_occurrences(maps:get(B, Atoms)),
+    (NrOccurrenceA == 1 andalso NrOccurrenceB > 1) orelse
+    (NrOccurrenceA > 1 andalso NrOccurrenceB == 1).
+
+-spec nr_occurrences(locations()) -> non_neg_integer().
+nr_occurrences(Locations) ->
+    maps:fold(fun (_, V, S) -> sets:size(V) + S end, 0, Locations).
