@@ -2,9 +2,12 @@
 
 -include("atomizer.hrl").
 
--export([atomize/1]).
+-export([
+    atomize/1,
+    format_error/1
+]).
 
--spec atomize(source()) -> {ok, atoms(), warnings()} | {error, term()}.
+-spec atomize(source()) -> {ok, atoms(), warnings()} | {error, {?MODULE, term()}}.
 atomize(Source) ->
     Pid = spawn_link(atomizer_compare, compare, [self()]),
     spawn_link(atomizer_collect, collect, [self(), Source]),
@@ -28,7 +31,7 @@ loop(Pid, Atoms, Warnings, NrParsed) ->
             {ok, Atoms, Warnings, NrParsed};
 
         {error, Error} ->
-            {error, Error}
+            {error, {?MODULE, Error}}
     end.
 
 -spec add_atom_location(atom(), file:filename(), position(), atoms()) -> atoms().
@@ -38,3 +41,7 @@ add_atom_location(Atom, File, Position, Atoms) ->
     UpdatedPositions = sets:add_element(Position, Positions),
     UpdatedLocations = maps:put(File, UpdatedPositions, Locations),
     maps:put(Atom, UpdatedLocations, Atoms).
+
+-spec format_error({module(), term()}) -> string().
+format_error({Module, Error}) ->
+    Module:format_error(Error).

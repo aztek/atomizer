@@ -7,9 +7,42 @@
 -define(ERLANG_EXTENSIONS, [".erl", ".hrl"]).
 
 -export([
-    parse_source/2,
-    detect_source/1
+    parse/2,
+    detect_source/1,
+    format_error/1
 ]).
+
+-spec parse(pid(), source()) -> {done_source, source()} | {error, {?MODULE, term()}}.
+parse(Pid, Source) ->
+    case parse_source(Pid, Source) of
+        ok -> Pid ! {done_source, Source};
+        {error, Error} -> Pid ! {?MODULE, Error}
+    end.
+
+-spec parse_source(pid(), source()) -> ok | {error, term()}.
+parse_source(Pid, Source) ->
+    case Source of
+        {erl, File} ->
+            put(filename, File),
+            put(pid, Pid),
+            case epp:open(File, []) of
+                {ok, Epp} -> parse_epp(Epp), ok;
+                {error, Error} -> {error, {erl, File, Error}}
+            end;
+
+        {dir, Dir} ->
+            case file:list_dir(Dir) of
+                {ok, Names} -> parse_paths(Pid, [filename:join(Dir, Name) || Name <- Names]), ok;
+                {error, Error} -> {error, {dir, Dir, Error}}
+            end;
+
+        {symlink, Path} ->
+            ?WARNING("Skipping symbolic link ~s", [Path]), ok
+    end.
+
+-spec parse_paths(pid(), [file:filename()]) -> any().
+parse_paths(Pid, Paths) ->
+    lists:foreach(fun (Path) -> parse_path(Pid, Path) end, Paths).
 
 -spec parse_path(pid(), file:filename()) -> any().
 parse_path(Pid, Path) ->
@@ -19,62 +52,31 @@ parse_path(Pid, Path) ->
         {error, Error} -> Pid ! {error, Error}
     end.
 
--spec parse_paths(pid(), [file:filename()]) -> any().
-parse_paths(Pid, Paths) ->
-    lists:foreach(fun (Path) -> parse_path(Pid, Path) end, Paths).
-
 -spec detect_source(file:filename()) -> {ok, source() | other} | {error, term()}.
 detect_source(Path) ->
     case file:read_file_info(Path) of
         {ok, Info} ->
             Type = case {Info#file_info.type, is_erlang(Path)} of
-                {directory, _}  -> {dir, Path};
-                {regular, true} -> {erl, Path};
-                _ -> other
-            end,
+                       {directory, _}  -> {dir, Path};
+                       {regular, true} -> {erl, Path};
+                       _ -> other
+                   end,
             {ok, Type};
 
         {error, enoent} ->
             % Error because Path is a symlink?
             case file:read_link_all(Path) of
                 {ok, _}    -> {ok, {symlink, Path}};
-                {error, _} -> {error, {enoent, Path}}
+                {error, _} -> {error, {file, enoent}}
             end;
 
         {error, Error} ->
-            {error, {Error, Path}}
+            {error, {file, Error}}
     end.
 
 -spec is_erlang(file:filename()) -> boolean().
 is_erlang(FileName) ->
     lists:any(fun (Ext) -> lists:suffix(Ext, FileName) end, ?ERLANG_EXTENSIONS).
-
--spec parse_source(pid(), source()) -> any().
-parse_source(Pid, Source = {erl, File}) ->
-    put(filename, File),
-    put(pid, Pid),
-    case epp:open(File, []) of
-        {ok, Epp} ->
-            parse_epp(Epp),
-            Pid ! {done_source, Source};
-
-        {error, Error} ->
-            Pid ! {error, {Error, File}}
-    end;
-
-parse_source(Pid, Source = {dir, Dir}) ->
-    case file:list_dir(Dir) of
-        {ok, Names} ->
-            parse_paths(Pid, [filename:join(Dir, Name) || Name <- Names]),
-            Pid ! {done_source, Source};
-
-        {error, Error} ->
-            Pid ! {error, {Error, Dir}}
-    end;
-
-parse_source(Pid, Source = {symlink, Path}) ->
-    ?WARNING("Skipping symbolic link ~s", [Path]),
-    Pid ! {done_source, Source}.
 
 -spec parse_epp(epp:epp_handle()) -> ok.
 parse_epp(Epp) ->
@@ -95,6 +97,15 @@ parse_epp(Epp) ->
                      [get(filename), Line, Module:format_error(Error)]),
             parse_epp(Epp)
     end.
+
+-spec format_error({module(), term()}) -> string().
+format_error({Type, Path, {Module, Error}}) ->
+    Action = case Type of
+                 erl -> "parse";
+                 dir -> "read"
+             end,
+    io_lib:format("Failed to ~s ~s: ~s",
+                  [Action, Path, Module:format_error(Error)]).
 
 -spec parse_form(erl_parse:abstract_form()) -> ok.
 parse_form(Form) -> case Form of

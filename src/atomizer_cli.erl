@@ -18,11 +18,18 @@
     verbosity = 1    :: verbosity()
 }).
 
--spec main([string()]) -> ok.
+-spec main([string()]) -> no_return().
 main(_CmdArgs) ->
-    run(".").
+    case run(".") of
+        ok ->
+            halt(0);
 
--spec run(#options{} | file:filename()) -> ok.
+        {error, {Module, Error}} ->
+            ?ERROR("~p", [Module:format_error(Error)]),
+            halt(1)
+    end.
+
+-spec run(#options{} | file:filename()) -> ok | {error, term()}.
 run(#options{action = Action, paths = Paths, verbosity = Verbosity}) ->
     case atomizer:atomize(Paths) of
         {ok, Atoms, Warnings, NrParsed} ->
@@ -31,10 +38,11 @@ run(#options{action = Action, paths = Paths, verbosity = Verbosity}) ->
                 list -> list_atoms(Atoms, Verbosity);
                 show -> show_atoms(Atoms, Verbosity);
                 warn -> warn_atoms(Atoms, SignificantWarnings, NrParsed, Verbosity)
-            end;
+            end,
+            ok;
 
         {error, Error} ->
-            ?ERROR("~p", Error)
+            {error, Error}
     end;
 
 run(Path) ->
