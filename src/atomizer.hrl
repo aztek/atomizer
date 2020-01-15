@@ -5,7 +5,8 @@
     position/0,
     warning/0,
     warnings/0,
-    path/0
+    path/0,
+    normal_form/0
 ]).
 
 -type source() :: {file, file:filename()}
@@ -23,3 +24,5 @@
 -type atoms()     :: #{atom() => locations()}.
 -type warning()   :: {atom(), atom()}.
 -type warnings()  :: sets:set(warning()).
+
+-type normal_form() :: nonempty_list(atom()).

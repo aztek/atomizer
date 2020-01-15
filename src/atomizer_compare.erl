@@ -28,16 +28,16 @@ loop(Pid, DoneAtoms) ->
                         true -> ignore;
                         false ->
                             ets:insert(atoms, {Atom}),
-                            case atomizer_normalize:normalize(Atom) of
-                                [] -> ignore;
-                                NormalForm ->
-                                    case ets:lookup(nfs, NormalForm) of
-                                        [{_, Btom}] ->
-                                            Pid ! {warning, Atom, Btom, nf_mismatch};
-                                        [] ->
-                                            ets:insert(nfs, {NormalForm, Atom})
-                                    end
-                            end
+                            NormalForms = atomizer_normalize:normalize(Atom),
+                            lists:foreach(fun (NormalForm) ->
+                                              case ets:lookup(nfs, NormalForm) of
+                                                  [{_, Btom}] ->
+                                                      Pid ! {warning, Atom, Btom, nf_mismatch};
+                                                  [] ->
+                                                      ets:insert(nfs, {NormalForm, Atom})
+                                              end
+                                          end,
+                                          NormalForms)
                     end
             end,
             loop(Pid, DoneAtoms);
