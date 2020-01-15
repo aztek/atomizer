@@ -73,9 +73,7 @@ parse_source(Pid, Source = {dir, Dir}) ->
     end;
 
 parse_source(Pid, Source = {symlink, Path}) ->
-    io:format(standard_error,
-              "\e[33mWarning: Skipping symbolic link ~s\e[00m~n",
-              [Path]),
+    ?WARNING("Skipping symbolic link ~s", [Path]),
     Pid ! {done_source, Source}.
 
 -spec parse_epp(epp:epp_handle()) -> ok.
@@ -88,21 +86,13 @@ parse_epp(Epp) ->
         {eof, _} -> ok;
 
         {warning, {Line, Module, Warning}} ->
-            io:format(standard_error,
-                      "\e[33mWarning: Skipping ~s, unable to parse line ~p: ~s\e[00m~n",
-                      [get(filename), Line, Module:format_error(Warning)]),
-            parse_epp(Epp);
-
-        {error, {_, epp, {include, file, _}}} ->
-            parse_epp(Epp);
-
-        {error, {_, epp, {undefined, _, _}}} ->
+            ?WARNING("Skipping parts of ~s, unable to parse line ~p: ~s",
+                     [get(filename), Line, Module:format_error(Warning)]),
             parse_epp(Epp);
 
         {error, {Line, Module, Error}} ->
-            io:format(standard_error,
-                      "\e[33mWarning: Skipping ~s, unable to parse line ~p: ~s\e[00m~n",
-                      [get(filename), Line, Module:format_error(Error)]),
+            ?WARNING("Skipping parts of ~s, unable to parse line ~p: ~s",
+                     [get(filename), Line, Module:format_error(Error)]),
             parse_epp(Epp)
     end.
 

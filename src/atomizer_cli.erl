@@ -34,7 +34,7 @@ run(#options{action = Action, paths = Paths, verbosity = Verbosity}) ->
             end;
 
         {error, Error} ->
-            io:format(standard_error, "Error: ~p~n", [Error])
+            ?ERROR("~p", Error)
     end;
 
 run(Path) ->

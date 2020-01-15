@@ -21,3 +21,9 @@
 -type warnings()  :: sets:set(warning()).
 
 -type normal_form() :: atom().
+
+-define(ERROR(Format, Args),
+    io:format(standard_error, "\e[31mError: " ++ Format ++ "\e[00m~n", Args)).
+
+-define(WARNING(Format, Args),
+    io:format(standard_error, "\e[33mWarning: " ++ Format ++ "\e[00m~n", Args)).
