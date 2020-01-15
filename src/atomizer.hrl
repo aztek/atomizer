@@ -5,19 +5,14 @@
     position/0,
     warning/0,
     warnings/0,
-    path/0,
     normal_form/0
 ]).
 
--type source() :: {file, file:filename()}
-                | {dir,  file:filename()}
-                | {files, [file:filename()]}
-                | {dirs,  [file:filename()]}.
-
 -type position() :: pos_integer().
 
--type path() :: {erl, file:filename()}
-              | {dir, file:filename()}.
+-type source() :: {erl, file:filename()}
+                | {dir, file:filename()}
+                | {symlink, file:filename()}.
 
 -type location()  :: {file:filename(), position()}.
 -type locations() :: #{file:filename() => sets:set(position())}.

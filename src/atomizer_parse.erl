@@ -6,62 +6,77 @@
 
 -define(ERLANG_EXTENSIONS, [".erl", ".hrl"]).
 
--export([parse_path/2]).
+-export([
+    parse_source/2,
+    detect_source/1
+]).
 
--spec parse_path(pid(), path()) -> any().
-parse_path(Pid, {erl, File}) ->
-    put(filename, File),
-    put(pid, Pid),
-    case epp:open(File, []) of
-        {ok, Epp} ->
-            parse_epp(Epp),
-            Pid ! {done_path, {erl, File}};
+-spec parse_path(pid(), file:filename()) -> any().
+parse_path(Pid, Path) ->
+    case detect_source(Path) of
+        {ok, other}    -> ignore;
+        {ok, Source}   -> Pid ! {add_source, Source};
+        {error, Error} -> Pid ! {error, Error}
+    end.
 
-        {error, Error} ->
-            Pid ! {error, {Error, File}}
-    end;
+-spec parse_paths(pid(), [file:filename()]) -> any().
+parse_paths(Pid, Paths) ->
+    lists:foreach(fun (Path) -> parse_path(Pid, Path) end, Paths).
 
-parse_path(Pid, {dir, Dir}) ->
-    case file:list_dir(Dir) of
-        {ok, Names} ->
-            lists:foreach(fun (Name) ->
-                Path = filename:join(Dir, Name),
-                case file:read_file_info(Path) of
-                    {ok, Info} ->
-                        case Info#file_info.type of
-                            directory ->
-                                Pid ! {add_path, {dir, Path}};
-                            regular ->
-                                case is_erlang(Name) of
-                                    true  -> Pid ! {add_path, {erl, Path}};
-                                    false -> ignore
-                                end;
-                            _ -> ignore
-                        end;
+-spec detect_source(file:filename()) -> {ok, source() | other} | {error, term()}.
+detect_source(Path) ->
+    case file:read_file_info(Path) of
+        {ok, Info} ->
+            Type = case {Info#file_info.type, is_erlang(Path)} of
+                {directory, _}  -> {dir, Path};
+                {regular, true} -> {erl, Path};
+                _ -> other
+            end,
+            {ok, Type};
 
-                    {error, enoent} ->
-                        % Error because Path is a symlink?
-                        case file:read_link_all(Path) of
-                            {ok, _} -> io:format(standard_error,
-                                                 "\e[33mWarning: Skipping symbolic link ~s\e[00m~n",
-                                                 [Path]);
-
-                            {error, _} -> Pid ! {error, {enoent, Path}}
-                        end;
-
-                    {error, Error} ->
-                        Pid ! {error, {Error, Path}}
-                end
-            end, Names),
-            Pid ! {done_path, {dir, Dir}};
+        {error, enoent} ->
+            % Error because Path is a symlink?
+            case file:read_link_all(Path) of
+                {ok, _}    -> {ok, {symlink, Path}};
+                {error, _} -> {error, {enoent, Path}}
+            end;
 
         {error, Error} ->
-            Pid ! {error, {Error, Dir}}
+            {error, {Error, Path}}
     end.
 
 -spec is_erlang(file:filename()) -> boolean().
 is_erlang(FileName) ->
     lists:any(fun (Ext) -> lists:suffix(Ext, FileName) end, ?ERLANG_EXTENSIONS).
+
+-spec parse_source(pid(), source()) -> any().
+parse_source(Pid, Source = {erl, File}) ->
+    put(filename, File),
+    put(pid, Pid),
+    case epp:open(File, []) of
+        {ok, Epp} ->
+            parse_epp(Epp),
+            Pid ! {done_source, Source};
+
+        {error, Error} ->
+            Pid ! {error, {Error, File}}
+    end;
+
+parse_source(Pid, Source = {dir, Dir}) ->
+    case file:list_dir(Dir) of
+        {ok, Names} ->
+            parse_paths(Pid, [filename:join(Dir, Name) || Name <- Names]),
+            Pid ! {done_source, Source};
+
+        {error, Error} ->
+            Pid ! {error, {Error, Dir}}
+    end;
+
+parse_source(Pid, Source = {symlink, Path}) ->
+    io:format(standard_error,
+              "\e[33mWarning: Skipping symbolic link ~s\e[00m~n",
+              [Path]),
+    Pid ! {done_source, Source}.
 
 -spec parse_epp(epp:epp_handle()) -> ok.
 parse_epp(Epp) ->

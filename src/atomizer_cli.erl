@@ -13,18 +13,18 @@
 -type verbosity() :: 0 | 1 | 2. % 0 is least verbose, 2 is most verbose
 
 -record(options, {
-    action = warn :: action(),
-    source :: source(),
-    verbosity = 1 :: verbosity()
+    action    = warn :: action(),
+    paths     = []   :: [file:filename()],
+    verbosity = 1    :: verbosity()
 }).
 
 -spec main([string()]) -> ok.
 main(_CmdArgs) ->
-    run({dir, "."}).
+    run(".").
 
--spec run(#options{} | source()) -> ok.
-run(#options{action = Action, source = Source, verbosity = Verbosity}) ->
-    case atomizer:atomize(Source) of
+-spec run(#options{} | file:filename()) -> ok.
+run(#options{action = Action, paths = Paths, verbosity = Verbosity}) ->
+    case atomizer:atomize(Paths) of
         {ok, Atoms, Warnings, NrParsed} ->
             SignificantWarnings = sets:filter(fun (Warning) -> is_significant(Atoms, Warning) end, Warnings),
             case Action of
@@ -37,16 +37,16 @@ run(#options{action = Action, source = Source, verbosity = Verbosity}) ->
             io:format(standard_error, "Error: ~p~n", [Error])
     end;
 
-run(Source) ->
-    run(#options{source = Source}).
+run(Path) ->
+    run(#options{paths = [Path]}).
 
--spec run(action(), source()) -> ok.
-run(Action, Source) ->
-    run(#options{action = Action, source = Source}).
+-spec run(action(), [file:filename()]) -> ok.
+run(Action, Paths) ->
+    run(#options{action = Action, paths = Paths}).
 
--spec run(action(), source(), verbosity()) -> ok.
-run(Action, Source, Verbosity) ->
-    run(#options{action = Action, source = Source, verbosity = Verbosity}).
+-spec run(action(), [file:filename()], verbosity()) -> ok.
+run(Action, Paths, Verbosity) ->
+    run(#options{action = Action, paths = Paths, verbosity = Verbosity}).
 
 -spec list_atoms(atoms(), verbosity()) -> ok.
 list_atoms(Atoms, Verbosity) ->
