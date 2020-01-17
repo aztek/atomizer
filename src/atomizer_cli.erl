@@ -32,12 +32,12 @@ main(_CmdArgs) ->
 -spec run(#options{} | file:filename()) -> ok | {error, term()}.
 run(#options{action = Action, paths = Paths, verbosity = Verbosity}) ->
     case atomizer:atomize(Paths) of
-        {ok, Atoms, Warnings, NrParsed} ->
+        {ok, Atoms, Warnings, NrFiles, NrDirs} ->
             SignificantWarnings = sets:filter(fun (Warning) -> is_significant(Atoms, Warning) end, Warnings),
             case Action of
                 list -> list_atoms(Atoms, Verbosity);
                 show -> show_atoms(Atoms, Verbosity);
-                warn -> warn_atoms(Atoms, SignificantWarnings, NrParsed, Verbosity)
+                warn -> warn_atoms(Atoms, SignificantWarnings, NrFiles, NrDirs, Verbosity)
             end,
             ok;
 
@@ -109,17 +109,18 @@ show_location(File, _, NrPositions, _) ->
     io:format("~s \e[3m(~w ~s)\e[00m~n",
               [File, NrPositions, plural(NrPositions, "occurrence", "occurrences")]).
 
--spec warn_atoms(atoms(), warnings(), non_neg_integer(), verbosity()) -> ok.
-warn_atoms(Atoms, Warnings, NrParsed, Verbosity) ->
+-spec warn_atoms(atoms(), warnings(), non_neg_integer(), non_neg_integer(), verbosity()) -> ok.
+warn_atoms(Atoms, Warnings, NrFiles, NrDirs, Verbosity) ->
     NrAtoms = maps:size(Atoms),
     NrWarnings = sets:size(Warnings),
     lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning, Verbosity) end,
                   lists:sort(sets:to_list(Warnings))),
     io:format("Found \e[1m~p\e[00m ~s of similar atoms among "
-              "the total of \e[1m~p\e[00m ~s in \e[1m~p\e[00m ~s.~n",
+              "\e[1m~p\e[00m ~s in \e[1m~p\e[00m ~s and \e[1m~p\e[00m ~s.~n",
               [NrWarnings, plural(NrWarnings, "pair", "pairs"),
                NrAtoms,    plural(NrAtoms,    "atom", "atoms"),
-               NrParsed,   plural(NrParsed,   "file", "files")]).
+               NrFiles,    plural(NrFiles,    "file", "files"),
+               NrDirs,     plural(NrDirs,     "directory", "directories")]).
  
 plural(1, Singular, _) -> Singular;
 plural(_, _, Plural)   -> Plural.

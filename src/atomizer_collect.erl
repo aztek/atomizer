@@ -11,17 +11,17 @@
     format_error/1
 ]).
 
--spec collect(pid(), [file:filename()]) -> {ok, non_neg_integer()} | {error, term()}.
+-spec collect(pid(), [file:filename()]) -> {ok, non_neg_integer(), non_neg_integer()} | {error, term()}.
 collect(Pid, Paths) ->
     case collect_paths(Pid, Paths) of
-        {ok, NrParsed} -> Pid ! {done_atoms, NrParsed};
+        {ok, NrFiles, NrDirs} -> Pid ! {done_atoms, NrFiles, NrDirs};
         {error, Error} -> Pid ! {error, {?MODULE, Error}}
     end.
 
--spec collect_paths(pid(), [file:filename()]) -> {ok, non_neg_integer()} | {error, term()}.
+-spec collect_paths(pid(), [file:filename()]) -> {ok, non_neg_integer(), non_neg_integer()} | {error, term()}.
 collect_paths(Pid, Paths) ->
     case collect_sources(Paths) of
-        {ok, Sources}  -> loop(Pid, 0, sets:new(), queue:from_list(Sources));
+        {ok, Sources}  -> loop(Pid, {0, 0}, sets:new(), queue:from_list(Sources));
         {error, Error} -> {error, Error}
     end.
 
@@ -37,11 +37,16 @@ collect_sources(Paths) ->
                 end,
                 {ok, []}, Paths).
 
--spec loop(pid(), non_neg_integer(), sets:set(source()), queue:queue(source())) -> {ok, non_neg_integer()} | {error, term()}.
+-spec loop(pid(), {NrFiles, NrDirs}, Pool, Queue) -> {ok, NrFiles, NrDirs} | {error, term()} when
+    NrFiles :: non_neg_integer(),
+    NrDirs  :: non_neg_integer(),
+    Pool    :: sets:set(source()),
+    Queue   :: queue:queue(source()).
 loop(Pid, NrParsed, Pool, Queue) ->
     case {sets:size(Pool), queue:len(Queue)} of
         {0, 0} ->
-            {ok, NrParsed};
+            {NrFiles, NrDirs} = NrParsed,
+            {ok, NrFiles, NrDirs};
 
         {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_FILE_LIMIT, QueueSize > 0 ->
             {{value, Source}, TailQueue} = queue:out(Queue),
@@ -58,7 +63,13 @@ loop(Pid, NrParsed, Pool, Queue) ->
                     loop(Pid, NrParsed, Pool, Queue);
 
                 {done_source, Source} ->
-                    loop(Pid, NrParsed + 1, sets:del_element(Source, Pool), Queue);
+                    {NrFiles, NrDirs} = NrParsed,
+                    IncrementedNrParsed = case Source of
+                        {erl, _} -> {NrFiles + 1, NrDirs};
+                        {dir, _} -> {NrFiles, NrDirs + 1};
+                        _        -> {NrFiles, NrDirs}
+                    end,
+                    loop(Pid, IncrementedNrParsed, sets:del_element(Source, Pool), Queue);
 
                 {error, Error} ->
                     {error, Error}

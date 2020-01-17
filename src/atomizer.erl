@@ -7,28 +7,32 @@
     format_error/1
 ]).
 
--spec atomize(source()) -> {ok, atoms(), warnings()} | {error, {?MODULE, term()}}.
+-type atomize_result() :: {ok, atoms(), warnings(), NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()}
+                        | {error, {?MODULE, term()}}.
+
+-spec atomize(source()) -> atomize_result().
 atomize(Source) ->
     Pid = spawn_link(atomizer_compare, compare, [self()]),
     spawn_link(atomizer_collect, collect, [self(), Source]),
-    loop(Pid, maps:new(), sets:new(), -1).
+    loop(Pid, maps:new(), sets:new(), {-1, -1}).
 
--spec loop(pid(), atoms(), warnings(), integer()) -> {ok, atoms(), warnings(), non_neg_integer()} | {error, term()}.
+-spec loop(pid(), atoms(), warnings(), {integer(), integer()}) -> atomize_result().
 loop(Pid, Atoms, Warnings, NrParsed) ->
     receive
         {atom, Atom, File, Position} ->
             Pid ! {atom, Atom},
             loop(Pid, add_atom_location(Atom, File, Position, Atoms), Warnings, NrParsed);
 
-        {done_atoms, ActualNrParsed} ->
+        {done_atoms, NrFiles, NrDirs} ->
             Pid ! done_atoms,
-            loop(Pid, Atoms, Warnings, ActualNrParsed);
+            loop(Pid, Atoms, Warnings, {NrFiles, NrDirs});
 
         {warning, Atom, Btom, _} ->
             loop(Pid, Atoms, sets:add_element({Atom, Btom}, Warnings), NrParsed);
 
         done_warnings ->
-            {ok, Atoms, Warnings, NrParsed};
+            {NrFiles, NrDirs} = NrParsed,
+            {ok, Atoms, Warnings, NrFiles, NrDirs};
 
         {error, Error} ->
             {error, {?MODULE, Error}}
