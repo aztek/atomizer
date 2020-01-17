@@ -54,24 +54,23 @@ parse_path(Pid, Path) ->
 
 -spec detect_source(file:filename()) -> {ok, source() | other} | {error, term()}.
 detect_source(Path) ->
-    case file:read_file_info(Path) of
-        {ok, Info} ->
-            Type = case {Info#file_info.type, is_erlang(Path)} of
-                       {directory, _}  -> {dir, Path};
-                       {regular, true} -> {erl, Path};
-                       _ -> other
-                   end,
-            {ok, Type};
+    case file:read_link_all(Path) of
+        {ok, _} ->
+            {ok, {symlink, Path}};
 
-        {error, enoent} ->
-            % Error because Path is a symlink?
-            case file:read_link_all(Path) of
-                {ok, _}    -> {ok, {symlink, Path}};
-                {error, _} -> {error, {file, enoent}}
-            end;
+        {error, _} ->
+            case file:read_file_info(Path) of
+                {ok, Info} ->
+                    Type = case {Info#file_info.type, is_erlang(Path)} of
+                               {directory, _}  -> {dir, Path};
+                               {regular, true} -> {erl, Path};
+                               _ -> other
+                           end,
+                    {ok, Type};
 
-        {error, Error} ->
-            {error, {file, Error}}
+                {error, Error} ->
+                    {error, {file, Error}}
+            end
     end.
 
 -spec is_erlang(file:filename()) -> boolean().
