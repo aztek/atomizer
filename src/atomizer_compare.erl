@@ -6,44 +6,35 @@
 
 -spec compare(pid()) -> ok.
 compare(Pid) ->
-    ets:new(atoms, [private, named_table, set]),
-    ets:new(nfs, [private, named_table, bag]),
-    Result = loop(Pid, false),
-    ets:delete(nfs),
-    ets:delete(atoms),
-    Result.
+    Atoms = ets:new(atoms, [private, set]),
+    NFs = ets:new(nfs, [private, bag]),
+    loop(Pid, Atoms, NFs),
+    ets:delete(NFs),
+    ets:delete(Atoms).
 
--spec loop(pid(), boolean()) -> ok.
-loop(Pid, true) ->
-    Pid ! done_warnings,
-    ok;
-
-loop(Pid, DoneAtoms) ->
+-spec loop(pid(), ets:tid(), ets:tid()) -> ok.
+loop(Pid, Atoms, NFs) ->
     receive
         {atom, Atom} ->
-            case insignificant(Atom) of
+            case insignificant(Atom) orelse ets:member(Atoms, Atom) of
                 true -> ignore;
                 false ->
-                    case ets:member(atoms, Atom) of
-                        true -> ignore;
-                        false ->
-                            ets:insert(atoms, {Atom}),
-                            NormalForms = atomizer_normalize:normalize(Atom),
-                            lists:foreach(fun (NormalForm) ->
-                                              case ets:lookup(nfs, NormalForm) of
-                                                  [{_, Btom}] ->
-                                                      Pid ! {warning, Atom, Btom, nf_mismatch};
-                                                  [] ->
-                                                      ets:insert(nfs, {NormalForm, Atom})
-                                              end
-                                          end,
-                                          NormalForms)
-                    end
+                    ets:insert(Atoms, {Atom}),
+                    lists:foreach(fun (NormalForm) ->
+                                      case ets:lookup(NFs, NormalForm) of
+                                          [{_, Btom}] ->
+                                              Pid ! {warning, Atom, Btom, nf_mismatch};
+                                          [] ->
+                                              ets:insert(NFs, {NormalForm, Atom})
+                                      end
+                                  end,
+                                  atomizer_normalize:normalize(Atom))
             end,
-            loop(Pid, DoneAtoms);
+            loop(Pid, Atoms, NFs);
 
         done_atoms ->
-            loop(Pid, true)
+            Pid ! done_warnings,
+            ok
     end.
 
 insignificant(Atom) ->
