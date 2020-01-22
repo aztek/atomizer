@@ -15,6 +15,7 @@
 -record(options, {
     action    = warn :: action(),
     paths     = []   :: [file:filename()],
+    includes  = []   :: [file:filename()],
     verbosity = 1    :: verbosity()
 }).
 
@@ -46,11 +47,32 @@ parse_args(CmdArgs) -> parse_args(CmdArgs, #options{}).
 -spec parse_args([string()], #options{}) -> {ok, #options{}} | {message, string()} | {error, string()}.
 parse_args([], Options) -> {options, Options};
 parse_args([CmdArg | CmdArgs], Options) ->
-    case CmdArg of
-        _Help when CmdArg == "-h"; CmdArg == "--help" ->
+    case string:prefix(CmdArg, "-") of
+        nomatch ->
+            parse_args(CmdArgs, Options#options{paths = [CmdArg | Options#options.paths]});
+
+        Option ->
+            parse_option(Option, CmdArgs, Options)
+    end.
+
+-spec parse_includes([string()], #options{}) -> {ok, #options{}} | {message, string()} | {error, string()}.
+parse_includes([], Options) -> {options, Options};
+parse_includes([CmdArg | CmdArgs], Options) ->
+    case string:prefix(CmdArg, "-") of
+        nomatch ->
+            parse_includes(CmdArgs, Options#options{includes = [CmdArg | Options#options.includes]});
+
+        Option ->
+            parse_option(Option, CmdArgs, Options)
+    end.
+
+-spec parse_option(string(), [string()], #options{}) -> {ok, #options{}} | {message, string()} | {error, string()}.
+parse_option(Option, CmdArgs, Options) ->
+    case Option of
+        _Help when Option == "h"; Option == "-help" ->
             {message, usage() ++ "\n" ++ help()};
 
-        _Action when CmdArg == "-a"; CmdArg == "--action" ->
+        _Action when Option == "a"; Option == "-action" ->
             case parse_action(CmdArgs) of
                 {ok, Action, TailCmdArgs} ->
                     parse_args(TailCmdArgs, Options#options{action = Action});
@@ -59,8 +81,11 @@ parse_args([CmdArg | CmdArgs], Options) ->
                     {error, Error}
             end;
 
-        _Verbosity when CmdArg == "-v"; CmdArg == "--verbosity" ->
-            case parse_verbosity(CmdArgs) of
+        _Includes when Option == "i"; Option == "I"; Option == "-include" ->
+            parse_includes(CmdArgs, Options);
+
+        _Verbosity when Option == "-v"; Option == "--verbosity" ->
+            case parse_verbosity(Option) of
                 {ok, Verbosity, TailCmdArgs} ->
                     parse_args(TailCmdArgs, Options#options{verbosity = Verbosity});
 
@@ -68,8 +93,8 @@ parse_args([CmdArg | CmdArgs], Options) ->
                     {error, Error}
             end;
 
-        Path ->
-            parse_args(CmdArgs, Options#options{paths = [Path | Options#options.paths]})
+        _ ->
+            {error, "Unrecognized option."}
     end.
 
 -spec parse_action([string()]) -> {ok, action(), [string()]} | {error, string()}.
@@ -93,14 +118,14 @@ parse_verbosity([CmdArg | CmdArgs]) ->
     end.
 
 usage() ->
-    "Usage: atomizer [-a | --action ACTION] [-v | --verbosity VERBOSITY] PATH*\n".
+    "Usage: atomizer [-a | --action ACTION] [-v | --verbosity VERBOSITY] PATH* [-i | --include PATH*]\n".
 
 help() ->
     "".
 
 -spec run(#options{} | file:filename()) -> ok | {error, term()}.
-run(#options{action = Action, paths = Paths, verbosity = Verbosity}) ->
-    case atomizer:atomize(Paths) of
+run(#options{action = Action, paths = Paths, includes = IncludePaths, verbosity = Verbosity}) ->
+    case atomizer:atomize(Paths, IncludePaths) of
         {ok, Atoms, Warnings, NrFiles, NrDirs} ->
             SignificantWarnings = sets:filter(fun (Warning) -> is_significant(Atoms, Warning) end, Warnings),
             case Action of

@@ -7,25 +7,25 @@
 -define(ERLANG_EXTENSIONS, [".erl", ".hrl"]).
 
 -export([
-    parse/2,
+    parse/3,
     detect_source/1,
     format_error/1
 ]).
 
--spec parse(pid(), source()) -> {done_source, source()} | {error, {?MODULE, term()}}.
-parse(Pid, Source) ->
-    case parse_source(Pid, Source) of
+-spec parse(pid(), source(), [file:filename()]) -> {done_source, source()} | {error, {?MODULE, term()}}.
+parse(Pid, Source, IncludePaths) ->
+    case parse_source(Pid, Source, IncludePaths) of
         ok -> Pid ! {done_source, Source};
         {error, Error} -> Pid ! {?MODULE, Error}
     end.
 
--spec parse_source(pid(), source()) -> ok | {error, term()}.
-parse_source(Pid, Source) ->
+-spec parse_source(pid(), source(), [file:filename()]) -> ok | {error, term()}.
+parse_source(Pid, Source, IncludePaths) ->
     case Source of
         {erl, File} ->
             put(filename, File),
             put(pid, Pid),
-            case epp:open(File, []) of
+            case epp:open(File, IncludePaths) of
                 {ok, Epp} -> parse_epp(Epp), ok;
                 {error, Error} -> {error, {erl, File, Error}}
             end;

@@ -7,21 +7,21 @@
 -define(OPEN_FILE_LIMIT, 10).
 
 -export([
-    collect/2,
+    collect/3,
     format_error/1
 ]).
 
--spec collect(pid(), [file:filename()]) -> {ok, non_neg_integer(), non_neg_integer()} | {error, term()}.
-collect(Pid, Paths) ->
-    case collect_paths(Pid, Paths) of
+-spec collect(pid(), [file:filename()], [file:filename()]) -> {ok, non_neg_integer(), non_neg_integer()} | {error, term()}.
+collect(Pid, Paths, IncludePaths) ->
+    case collect_paths(Pid, Paths, IncludePaths) of
         {ok, NrFiles, NrDirs} -> Pid ! {done_atoms, NrFiles, NrDirs};
         {error, Error} -> Pid ! {error, {?MODULE, Error}}
     end.
 
--spec collect_paths(pid(), [file:filename()]) -> {ok, non_neg_integer(), non_neg_integer()} | {error, term()}.
-collect_paths(Pid, Paths) ->
+-spec collect_paths(pid(), [file:filename()], [file:filename()]) -> {ok, non_neg_integer(), non_neg_integer()} | {error, term()}.
+collect_paths(Pid, Paths, IncludePaths) ->
     case collect_sources(Paths) of
-        {ok, Sources}  -> loop(Pid, {0, 0}, sets:new(), queue:from_list(Sources));
+        {ok, Sources}  -> loop(Pid, {0, 0}, sets:new(), queue:from_list(Sources), IncludePaths);
         {error, Error} -> {error, Error}
     end.
 
@@ -37,12 +37,13 @@ collect_sources(Paths) ->
                 end,
                 {ok, []}, Paths).
 
--spec loop(pid(), {NrFiles, NrDirs}, Pool, Queue) -> {ok, NrFiles, NrDirs} | {error, term()} when
+-spec loop(pid(), {NrFiles, NrDirs}, Pool, Queue, IncludePaths) -> {ok, NrFiles, NrDirs} | {error, term()} when
     NrFiles :: non_neg_integer(),
     NrDirs  :: non_neg_integer(),
     Pool    :: sets:set(source()),
-    Queue   :: queue:queue(source()).
-loop(Pid, NrParsed, Pool, Queue) ->
+    Queue   :: queue:queue(source()),
+    IncludePaths :: [file:filename()].
+loop(Pid, NrParsed, Pool, Queue, IncludePaths) ->
     case {sets:size(Pool), queue:len(Queue)} of
         {0, 0} ->
             {NrFiles, NrDirs} = NrParsed,
@@ -50,17 +51,17 @@ loop(Pid, NrParsed, Pool, Queue) ->
 
         {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_FILE_LIMIT, QueueSize > 0 ->
             {{value, Source}, TailQueue} = queue:out(Queue),
-            spawn_link(atomizer_parse, parse, [self(), Source]),
-            loop(Pid, NrParsed, sets:add_element(Source, Pool), TailQueue);
+            spawn_link(atomizer_parse, parse, [self(), Source, IncludePaths]),
+            loop(Pid, NrParsed, sets:add_element(Source, Pool), TailQueue, IncludePaths);
 
         _ ->
             receive
                 {add_source, Source} ->
-                    loop(Pid, NrParsed, Pool, queue:in(Source, Queue));
+                    loop(Pid, NrParsed, Pool, queue:in(Source, Queue), IncludePaths);
 
                 {atom, Atom, File, Location} ->
                     Pid ! {atom, Atom, File, Location},
-                    loop(Pid, NrParsed, Pool, Queue);
+                    loop(Pid, NrParsed, Pool, Queue, IncludePaths);
 
                 {done_source, Source} ->
                     {NrFiles, NrDirs} = NrParsed,
@@ -69,7 +70,7 @@ loop(Pid, NrParsed, Pool, Queue) ->
                         {dir, _} -> {NrFiles, NrDirs + 1};
                         _        -> {NrFiles, NrDirs}
                     end,
-                    loop(Pid, IncrementedNrParsed, sets:del_element(Source, Pool), Queue);
+                    loop(Pid, IncrementedNrParsed, sets:del_element(Source, Pool), Queue, IncludePaths);
 
                 {error, Error} ->
                     {error, Error}

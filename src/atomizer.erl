@@ -3,17 +3,17 @@
 -include("atomizer.hrl").
 
 -export([
-    atomize/1,
+    atomize/2,
     format_error/1
 ]).
 
 -type atomize_result() :: {ok, atoms(), warnings(), NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()}
                         | {error, {?MODULE, term()}}.
 
--spec atomize(source()) -> atomize_result().
-atomize(Source) ->
+-spec atomize([file:filename()], [file:filename()]) -> atomize_result().
+atomize(Paths, IncludePaths) ->
     Pid = spawn_link(atomizer_compare, compare, [self()]),
-    spawn_link(atomizer_collect, collect, [self(), Source]),
+    spawn_link(atomizer_collect, collect, [self(), Paths, IncludePaths]),
     loop(Pid, maps:new(), sets:new(), {-1, -1}).
 
 -spec loop(pid(), atoms(), warnings(), {integer(), integer()}) -> atomize_result().
