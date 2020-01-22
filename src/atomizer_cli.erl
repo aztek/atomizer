@@ -19,15 +19,84 @@
 }).
 
 -spec main([string()]) -> no_return().
-main(_CmdArgs) ->
-    case run(".") of
-        ok ->
+main(CmdArgs) ->
+    case parse_args(CmdArgs) of
+        {options, Options} ->
+            case run(Options) of
+                ok ->
+                    halt(0);
+
+                {error, {Module, Error}} ->
+                    ?ERROR("~s", [Module:format_error(Error)]),
+                    halt(1)
+            end;
+
+        {message, Message} ->
+            io:format("~s~n", [Message]),
             halt(0);
 
-        {error, {Module, Error}} ->
-            ?ERROR("~s", [Module:format_error(Error)]),
+        {error, Error} ->
+            io:format(standard_error, "~s~n", [Error]),
             halt(1)
     end.
+
+-spec parse_args([string()]) -> {ok, #options{}} | {message, string()} | {error, string()}.
+parse_args(CmdArgs) -> parse_args(CmdArgs, #options{}).
+
+-spec parse_args([string()], #options{}) -> {ok, #options{}} | {message, string()} | {error, string()}.
+parse_args([], Options) -> {options, Options};
+parse_args([CmdArg | CmdArgs], Options) ->
+    case CmdArg of
+        _Help when CmdArg == "-h"; CmdArg == "--help" ->
+            {message, usage() ++ "\n" ++ help()};
+
+        _Action when CmdArg == "-a"; CmdArg == "--action" ->
+            case parse_action(CmdArgs) of
+                {ok, Action, TailCmdArgs} ->
+                    parse_args(TailCmdArgs, Options#options{action = Action});
+
+                {error, Error} ->
+                    {error, Error}
+            end;
+
+        _Verbosity when CmdArg == "-v"; CmdArg == "--verbosity" ->
+            case parse_verbosity(CmdArgs) of
+                {ok, Verbosity, TailCmdArgs} ->
+                    parse_args(TailCmdArgs, Options#options{verbosity = Verbosity});
+
+                {error, Error} ->
+                    {error, Error}
+            end;
+
+        Path ->
+            parse_args(CmdArgs, Options#options{paths = [Path | Options#options.paths]})
+    end.
+
+-spec parse_action([string()]) -> {ok, action(), [string()]} | {error, string()}.
+parse_action([]) -> {error, "Malformed arguments - action is missing."};
+parse_action([CmdArg | CmdArgs]) ->
+    case CmdArg of
+        "list" -> {ok, list, CmdArgs};
+        "show" -> {ok, show, CmdArgs};
+        "warn" -> {ok, warn, CmdArgs};
+        _ -> {error, "Wrong action. Supported values are list, show and warn."}
+    end.
+
+-spec parse_verbosity([string()]) -> {ok, verbosity(), [string()]} | {error, string()}.
+parse_verbosity([]) -> {error, "Malformed arguments - verbosity is missing."};
+parse_verbosity([CmdArg | CmdArgs]) ->
+    case CmdArg of
+        "0" -> {ok, 0, CmdArgs};
+        "1" -> {ok, 1, CmdArgs};
+        "2" -> {ok, 2, CmdArgs};
+        _ -> {error, "Wrong verbosity. Supported values are 0, 1 and 2."}
+    end.
+
+usage() ->
+    "Usage: atomizer [-a | --action ACTION] [-v | --verbosity VERBOSITY] PATH*\n".
+
+help() ->
+    "".
 
 -spec run(#options{} | file:filename()) -> ok | {error, term()}.
 run(#options{action = Action, paths = Paths, verbosity = Verbosity}) ->
