@@ -1,16 +1,18 @@
 .PHONY: all clean
 
-all: atomizer clean
+all: atomizer
 
 ERLS=$(wildcard src/*.erl)
 BEAMS=$(ERLS:src/%.erl=ebin/%.beam)
 
-ERLC_OPTS = -I include -pa ebin +debug_info
+ERLC_OPTS = -pa ebin +debug_info
 
-atomizer: $(BEAMS)
+atomizer: bin/atomizer
+
+bin/atomizer: $(BEAMS)
 	mkdir -p bin
 	erl -noinput -eval '$(erl_build_escript)'
-	chmod +x $@
+	chmod +x bin/atomizer
 
 ebin:
 	mkdir -p ebin
