@@ -28,7 +28,7 @@ main(CmdArgs) ->
                     halt(0);
 
                 {error, {Module, Error}} ->
-                    ?ERROR("~s", [Module:format_error(Error)]),
+                    ?PRINT_ERROR(Module:format_error(Error)),
                     halt(1)
             end;
 
@@ -37,7 +37,7 @@ main(CmdArgs) ->
             halt(0);
 
         {error, Error} ->
-            io:format(standard_error, "~s~n", [Error]),
+            ?PRINT_ERROR(Error),
             halt(1)
     end.
 

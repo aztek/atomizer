@@ -21,8 +21,14 @@
 
 -type normal_form() :: atom().
 
+-define(PRINT_ERROR(Error),
+    io:put_chars(standard_error, ["\e[31mError: ", Error, "\e[00m\n"])).
+
 -define(ERROR(Format, Args),
-    io:format(standard_error, "\e[31mError: " ++ Format ++ "\e[00m~n", Args)).
+    ?PRINT_ERROR(io_lib:format(Format, Args))).
+
+-define(PRINT_WARNING(Warning),
+    io:put_chars(standard_error, ["\e[33mWarning: ", Warning, "\e[00m\n"])).
 
 -define(WARNING(Format, Args),
-    io:format(standard_error, "\e[33mWarning: " ++ Format ++ "\e[00m~n", Args)).
+    ?PRINT_WARNING(io_lib:format(Format, Args))).

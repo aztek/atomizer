@@ -51,12 +51,12 @@ parse_source(Pid, Source, IncludePaths) ->
 parse_paths(Pid, Paths) ->
     lists:foreach(fun (Path) -> parse_path(Pid, Path) end, Paths).
 
--spec parse_path(pid(), file:filename()) -> ignore | {add_source, source()} | {error, {?MODULE, error()}}.
+-spec parse_path(pid(), file:filename()) -> ignore | {add_source, source()} | {error, error()}.
 parse_path(Pid, Path) ->
     case detect_source(Path) of
-        {ok, other}    -> ignore;
-        {ok, Source}   -> Pid ! {add_source, Source};
-        {error, Error} -> Pid ! {error, Error}
+        {ok, other}  -> ignore;
+        {ok, Source} -> Pid ! {add_source, Source};
+        {error, {Module, Error}} -> ?PRINT_WARNING(Module:format_error(Error)), Error
     end.
 
 -spec detect_source(file:filename()) -> {ok, source() | other} | {error, {?MODULE, error()}}.
