@@ -4,6 +4,7 @@
 
 -include_lib("kernel/include/file.hrl").
 
+-define(MAX_LEVEL_SYMLINKS, 10).
 -define(ERLANG_EXTENSIONS, [".erl", ".hrl"]).
 
 -export([
@@ -12,39 +13,44 @@
     format_error/1
 ]).
 
--spec parse(pid(), source(), [file:filename()]) -> {done_source, source()} | {error, {?MODULE, term()}}.
+-type error() :: {file:filename(), {module(), atom()}}.
+
+-spec parse(pid(), source(), [file:filename()]) -> {done_source, source()} | {error, {?MODULE, error()}}.
 parse(Pid, Source, IncludePaths) ->
     case parse_source(Pid, Source, IncludePaths) of
         ok -> Pid ! {done_source, Source};
         {error, Error} -> Pid ! {?MODULE, Error}
     end.
 
--spec parse_source(pid(), source(), [file:filename()]) -> ok | {error, term()}.
+-spec parse_source(pid(), source(), [file:filename()]) -> ok | {error, error()}.
 parse_source(Pid, Source, IncludePaths) ->
     case Source of
         {erl, File} ->
             put(filename, File),
             put(pid, Pid),
-            case epp:open(File, IncludePaths) of
-                {ok, Epp} -> parse_epp(Epp), ok;
-                {error, Error} -> {error, {erl, File, Error}}
+            case resolve_real_path(File) of
+                {ok, Path} ->
+                    case epp:open(Path, IncludePaths) of
+                        {ok, Epp} -> parse_epp(Epp), ok;
+                        {error, Error} -> {error, {Path, Error}}
+                    end;
+
+                {error, Error} ->
+                    {error, {File, Error}}
             end;
 
         {dir, Dir} ->
             case file:list_dir(Dir) of
                 {ok, Names} -> parse_paths(Pid, [filename:join(Dir, Name) || Name <- Names]), ok;
-                {error, Error} -> {error, {dir, Dir, Error}}
-            end;
-
-        {symlink, Path} ->
-            ?WARNING("Skipping symbolic link ~s", [Path]), ok
+                {error, Error} -> {error, {Dir, {file, Error}}}
+            end
     end.
 
 -spec parse_paths(pid(), [file:filename()]) -> any().
 parse_paths(Pid, Paths) ->
     lists:foreach(fun (Path) -> parse_path(Pid, Path) end, Paths).
 
--spec parse_path(pid(), file:filename()) -> any().
+-spec parse_path(pid(), file:filename()) -> ignore | {add_source, source()} | {error, {?MODULE, error()}}.
 parse_path(Pid, Path) ->
     case detect_source(Path) of
         {ok, other}    -> ignore;
@@ -52,16 +58,13 @@ parse_path(Pid, Path) ->
         {error, Error} -> Pid ! {error, Error}
     end.
 
--spec detect_source(file:filename()) -> {ok, source() | other} | {error, term()}.
+-spec detect_source(file:filename()) -> {ok, source() | other} | {error, {?MODULE, error()}}.
 detect_source(Path) ->
-    case file:read_link_all(Path) of
-        {ok, _} ->
-            {ok, {symlink, Path}};
-
-        {error, _} ->
-            case file:read_file_info(Path) of
+    case resolve_real_path(Path) of
+        {ok, RealPath} ->
+            case file:read_file_info(RealPath) of
                 {ok, Info} ->
-                    Type = case {Info#file_info.type, is_erlang(Path)} of
+                    Type = case {Info#file_info.type, is_erlang(RealPath)} of
                                {directory, _}  -> {dir, Path};
                                {regular, true} -> {erl, Path};
                                _ -> other
@@ -69,8 +72,28 @@ detect_source(Path) ->
                     {ok, Type};
 
                 {error, Error} ->
-                    {error, {file, Error}}
-            end
+                    {error, {?MODULE, {Path, {file, Error}}}}
+            end;
+
+        {error, Error} ->
+            {error, {?MODULE, {Path, Error}}}
+    end.
+
+-spec resolve_real_path(file:filename()) -> {ok, file:filename()} | {error, {module(), atom()}}.
+resolve_real_path(Path) -> resolve_real_path(Path, ?MAX_LEVEL_SYMLINKS).
+
+-spec resolve_real_path(file:filename(), Fuel :: non_neg_integer()) -> {ok, file:filename()} | {error, {module(), atom()}}.
+resolve_real_path(_, 0) -> {error, {file, eloop}};
+resolve_real_path(Path, Fuel) ->
+    case file:read_link_all(Path) of
+        {ok, SymlinkPath} ->
+            resolve_real_path(filename:absname(SymlinkPath, filename:dirname(Path)), Fuel - 1);
+
+        {error, enoent} ->
+            {error, {file, enoent}};
+
+        {error, _} ->
+            {ok, Path}
     end.
 
 -spec is_erlang(file:filename()) -> boolean().
@@ -97,14 +120,9 @@ parse_epp(Epp) ->
             parse_epp(Epp)
     end.
 
--spec format_error({module(), term()}) -> string().
-format_error({Type, Path, {Module, Error}}) ->
-    Action = case Type of
-                 erl -> "parse";
-                 dir -> "read"
-             end,
-    io_lib:format("Failed to ~s ~s: ~s",
-                  [Action, Path, Module:format_error(Error)]).
+-spec format_error(error()) -> string().
+format_error({Path, {Module, Error}}) ->
+    io_lib:format("Failed to read ~s: ~s", [Path, Module:format_error(Error)]).
 
 -spec parse_form(erl_parse:abstract_form()) -> ok.
 parse_form(Form) -> case Form of

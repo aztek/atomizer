@@ -11,8 +11,7 @@
 -type position() :: pos_integer().
 
 -type source() :: {erl, file:filename()}
-                | {dir, file:filename()}
-                | {symlink, file:filename()}.
+                | {dir, file:filename()}.
 
 -type location()  :: {file:filename(), position()}.
 -type locations() :: #{file:filename() => sets:set(position())}.

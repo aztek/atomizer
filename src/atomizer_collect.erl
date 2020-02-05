@@ -64,7 +64,11 @@ loop(Pid, Collection, Pool, Queue, IncludePaths) ->
         _ ->
             receive
                 {add_source, Source} ->
-                    loop(Pid, Collection, Pool, queue:in(Source, Queue), IncludePaths);
+                    UpdatedQueue = case sets:is_element(Source, Pool) orelse sets:is_element(Source, Collection) of
+                        true  -> Queue;
+                        false -> queue:in(Source, Queue)
+                    end,
+                    loop(Pid, Collection, Pool, UpdatedQueue, IncludePaths);
 
                 {atom, Atom, File, Location} ->
                     Pid ! {atom, Atom, File, Location},
