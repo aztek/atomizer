@@ -29,7 +29,7 @@ collect_paths(Pid, Paths, IncludePaths) ->
 collect_sources(Paths) ->
     lists:foldl(fun (_, {error, Error}) -> {error, Error};
                     (Path, {ok, Sources}) ->
-                        case atomizer_parse:detect_source(Path) of
+                        case atomizer_traverse:detect_source(Path) of
                             {ok, other}    -> {ok, Sources};
                             {ok, Source}   -> {ok, [Source | Sources]};
                             {error, Error} -> {error, Error}
@@ -58,7 +58,7 @@ loop(Pid, Collection, Pool, Queue, IncludePaths) ->
 
         {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_FILE_LIMIT, QueueSize > 0 ->
             {{value, Source}, TailQueue} = queue:out(Queue),
-            spawn_link(atomizer_parse, parse, [self(), Source, IncludePaths]),
+            spawn_link(atomizer_traverse, traverse, [self(), Source, IncludePaths]),
             loop(Pid, Collection, sets:add_element(Source, Pool), TailQueue, IncludePaths);
 
         _ ->
