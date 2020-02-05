@@ -22,7 +22,7 @@
 -spec main([string()]) -> no_return().
 main(CmdArgs) ->
     case parse_args(CmdArgs) of
-        {options, Options} ->
+        {ok, Options} ->
             case run(Options) of
                 ok ->
                     halt(0);
