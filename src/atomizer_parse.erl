@@ -13,7 +13,8 @@
     format_error/1
 ]).
 
--type error() :: {file:filename(), {module(), atom()}}.
+-type symlink() :: {Source :: file:filename(), Destination :: file:filename()}.
+-type error()   :: {file:filename() | symlink(), {module(), atom()}}.
 
 -spec parse(pid(), source(), [file:filename()]) -> {done_source, source()} | {error, {?MODULE, error()}}.
 parse(Pid, Source, IncludePaths) ->
@@ -36,7 +37,7 @@ parse_source(Pid, Source, IncludePaths) ->
                     end;
 
                 {error, Error} ->
-                    {error, {File, Error}}
+                    {error, Error}
             end;
 
         {dir, Dir} ->
@@ -72,28 +73,30 @@ detect_source(Path) ->
                     {ok, Type};
 
                 {error, Error} ->
-                    {error, {?MODULE, {Path, {file, Error}}}}
+                    {error, {?MODULE, {{Path, RealPath}, {file, Error}}}}
             end;
 
         {error, Error} ->
-            {error, {?MODULE, {Path, Error}}}
+            {error, {?MODULE, Error}}
     end.
 
--spec resolve_real_path(file:filename()) -> {ok, file:filename()} | {error, {module(), atom()}}.
+-spec resolve_real_path(file:filename()) -> {ok, file:filename()} | {error, error()}.
 resolve_real_path(Path) -> resolve_real_path(Path, ?MAX_LEVEL_SYMLINKS).
 
--spec resolve_real_path(file:filename(), Fuel :: non_neg_integer()) -> {ok, file:filename()} | {error, {module(), atom()}}.
-resolve_real_path(_, 0) -> {error, {file, eloop}};
+-spec resolve_real_path(file:filename() | symlink(), Fuel :: non_neg_integer()) -> {ok, file:filename()} | {error, error()}.
+resolve_real_path(Path, 0) -> {error, {Path, {file, eloop}}};
 resolve_real_path(Path, Fuel) ->
-    case file:read_link_all(Path) of
+    {Source, Destination} = case Path of {_, _} -> Path; _ -> {Path, Path} end,
+    case file:read_link_all(Destination) of
         {ok, SymlinkPath} ->
-            resolve_real_path(filename:absname(SymlinkPath, filename:dirname(Path)), Fuel - 1);
+            RealPath = filename:absname(SymlinkPath, filename:dirname(Destination)),
+            resolve_real_path({Source, RealPath}, Fuel - 1);
 
         {error, enoent} ->
-            {error, {file, enoent}};
+            {error, {Path, {file, enoent}}};
 
         {error, _} ->
-            {ok, Path}
+            {ok, Destination}
     end.
 
 -spec is_erlang(file:filename()) -> boolean().
@@ -121,6 +124,8 @@ parse_epp(Epp) ->
     end.
 
 -spec format_error(error()) -> string().
+format_error({{SymlinkSrc, SymlinkDst}, {Module, Error}}) ->
+    io_lib:format("Failed to read symlink ~s -> ~s: ~s", [SymlinkSrc, SymlinkDst, Module:format_error(Error)]);
 format_error({Path, {Module, Error}}) ->
     io_lib:format("Failed to read ~s: ~s", [Path, Module:format_error(Error)]).
 
