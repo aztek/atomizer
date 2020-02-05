@@ -22,7 +22,7 @@
 -spec main([string()]) -> no_return().
 main(CmdArgs) ->
     case parse_args(CmdArgs) of
-        {ok, Options} ->
+        {options, Options} ->
             case run(Options) of
                 ok ->
                     halt(0);
@@ -41,10 +41,10 @@ main(CmdArgs) ->
             halt(1)
     end.
 
--spec parse_args([string()]) -> {ok, #options{}} | {message, string()} | {error, string()}.
+-spec parse_args([string()]) -> {options, #options{}} | {message, string()} | {error, string()}.
 parse_args(CmdArgs) -> parse_args(CmdArgs, #options{}).
 
--spec parse_args([string()], #options{}) -> {ok, #options{}} | {message, string()} | {error, string()}.
+-spec parse_args([string()], #options{}) -> {options, #options{}} | {message, string()} | {error, string()}.
 parse_args([], Options) -> {options, Options};
 parse_args([CmdArg | CmdArgs], Options) ->
     case string:prefix(CmdArg, "-") of
