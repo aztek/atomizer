@@ -21,7 +21,14 @@
 traverse(Pid, Source, IncludePaths) ->
     case read_source(Pid, Source, IncludePaths) of
         ok -> Pid ! {done_source, Source};
-        {error, Error} -> Pid ! {error, Error}
+        {error, {Module, Error}} ->
+            case ?ERRORS_AS_WARNINGS of
+                true ->
+                    ?WARNING(Module:format_error(Error)),
+                    Pid ! {done_source, Source};
+                false ->
+                    Pid ! {error, {Module, Error}}
+            end
     end.
 
 -spec read_source(pid(), source(), [file:filename()]) -> ok | {error, {module(), term()}}.
@@ -45,7 +52,14 @@ traverse_path(Pid, Path) ->
     case detect_source(Path) of
         {ok, other}  -> ignore;
         {ok, Source} -> Pid ! {add_source, Source};
-        {error, {Module, Error}} -> ?PRINT_WARNING(Module:format_error(Error)), Error
+        {error, {Module, Error}} ->
+            case ?ERRORS_AS_WARNINGS of
+                true ->
+                    ?WARNING(Module:format_error(Error)),
+                    ignore;
+                false ->
+                    {error, {Module, Error}}
+            end
     end.
 
 -spec detect_source(file:filename()) -> {ok, source() | other} | {error, {?MODULE, error()}}.

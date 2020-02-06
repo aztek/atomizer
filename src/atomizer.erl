@@ -35,7 +35,13 @@ loop(Pid, Atoms, Warnings, NrParsed) ->
             {ok, Atoms, Warnings, NrFiles, NrDirs};
 
         {error, Error} ->
-            {error, {?MODULE, Error}}
+            case ?ERRORS_AS_WARNINGS of
+                true ->
+                    ?WARNING(format_error(Error)),
+                    loop(Pid, Atoms, Warnings, NrParsed);
+                false ->
+                    {error, Error}
+            end
     end.
 
 -spec add_atom_location(atom(), file:filename(), position(), atoms()) -> atoms().

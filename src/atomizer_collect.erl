@@ -31,9 +31,16 @@ collect_sources(Paths, ParseBeams) ->
                     (Path, {ok, Sources}) ->
                         case atomizer_traverse:detect_source(Path) of
                             {ok, other} -> {ok, Sources};
-                            {ok, Source = {beam, _}} when ParseBeams -> {ok, [Source | Sources]};
+                            {ok, {beam, _}} when not ParseBeams -> {ok, Sources};
                             {ok, Source} -> {ok, [Source | Sources]};
-                            {error, Error} -> {error, Error}
+                            {error, Error} ->
+                                case ?ERRORS_AS_WARNINGS of
+                                    true ->
+                                        ?WARNING(format_error(Error)),
+                                        {ok, Sources};
+                                    false ->
+                                        {error, Error}
+                                end
                         end
                 end,
                 {ok, []}, Paths).

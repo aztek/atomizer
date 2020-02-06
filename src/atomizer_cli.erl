@@ -13,11 +13,12 @@
 -type verbosity() :: 0 | 1 | 2. % 0 is least verbose, 2 is most verbose
 
 -record(options, {
-    action     = warn  :: action(),
-    paths      = []    :: [file:filename()],
-    includes   = []    :: [file:filename()],
-    parse_beam = false :: boolean(),
-    verbosity  = 1     :: verbosity()
+    action      = warn  :: action(),
+    paths       = []    :: [file:filename()],
+    includes    = []    :: [file:filename()],
+    parse_beam  = false :: boolean(),
+    warn_errors = false :: boolean(),
+    verbosity   = 1     :: verbosity()
 }).
 
 -spec main([string()]) -> no_return().
@@ -29,7 +30,7 @@ main(CmdArgs) ->
                     halt(0);
 
                 {error, {Module, Error}} ->
-                    ?PRINT_ERROR(Module:format_error(Error)),
+                    ?ERROR(Module:format_error(Error)),
                     halt(1)
             end;
 
@@ -38,7 +39,7 @@ main(CmdArgs) ->
             halt(0);
 
         {error, Error} ->
-            ?PRINT_ERROR(Error),
+            ?ERROR(Error),
             halt(1)
     end.
 
@@ -88,6 +89,9 @@ parse_option(Option, CmdArgs, Options) ->
         _ParseBeam when Option == "b"; Option == "-parse-beam" ->
             parse_args(CmdArgs, Options#options{parse_beam = true});
 
+        _Warnings when Option == "w"; Options == "-warn-errors" ->
+            parse_args(CmdArgs, Options#options{warn_errors = true});
+
         _Verbosity when Option == "v"; Option == "-verbosity" ->
             case parse_verbosity(Option) of
                 {ok, Verbosity, TailCmdArgs} ->
@@ -122,14 +126,17 @@ parse_verbosity([CmdArg | CmdArgs]) ->
     end.
 
 usage() ->
-    "Usage: atomizer [-a | --action ACTION] [-b | --parse-beam] [-v | --verbosity VERBOSITY]\n" ++
-    "                PATH* [-i | --include PATH*]\n".
+    "Usage: atomizer [-a | --action ACTION] [-b | --parse-beam] [-i | -I | --include PATH*]\n" ++
+    "                [-w | --warn-errors] [-v | --verbosity VERBOSITY] PATH*\n".
 
 help() ->
     "".
 
 -spec run(#options{} | file:filename()) -> ok | {error, term()}.
-run(#options{action = Action, paths = Paths, includes = IncludePaths, parse_beam = ParseBeams, verbosity = Verbosity}) ->
+run(#options{action = Action, paths = Paths, includes = IncludePaths, parse_beam = ParseBeams,
+             warn_errors = WarnErrors, verbosity = Verbosity}) ->
+    ets:new(?CLI_OPTIONS_TABLE, [set, protected, named_table]),
+    ets:insert(?CLI_OPTIONS_TABLE, {warn_errors, WarnErrors}),
     case atomizer:atomize(Paths, IncludePaths, ParseBeams) of
         {ok, Atoms, Warnings, NrFiles, NrDirs} ->
             SignificantWarnings = sets:filter(fun (Warning) -> is_significant(Atoms, Warning) end, Warnings),

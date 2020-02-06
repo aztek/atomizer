@@ -22,14 +22,22 @@
 
 -type normal_form() :: atom().
 
--define(PRINT_ERROR(Error),
+-define(CLI_OPTIONS_TABLE, cli).
+
+-define(ERRORS_AS_WARNINGS,
+        case ets:lookup(?CLI_OPTIONS_TABLE, warn_errors) of
+            [{warn_errors, WarnErrors}] -> WarnErrors;
+            _ -> false
+        end).
+
+-define(ERROR(Error),
     io:put_chars(standard_error, ["\e[31mError: ", Error, "\e[00m\n"])).
 
 -define(ERROR(Format, Args),
-    ?PRINT_ERROR(io_lib:format(Format, Args))).
+    ?ERROR(io_lib:format(Format, Args))).
 
--define(PRINT_WARNING(Warning),
+-define(WARNING(Warning),
     io:put_chars(standard_error, ["\e[33mWarning: ", Warning, "\e[00m\n"])).
 
 -define(WARNING(Format, Args),
-    ?PRINT_WARNING(io_lib:format(Format, Args))).
+    ?WARNING(io_lib:format(Format, Args))).
