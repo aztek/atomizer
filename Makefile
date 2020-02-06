@@ -3,6 +3,7 @@
 all: atomizer
 
 ERLS=$(wildcard src/*.erl)
+HRLS=$(wildcard src/*.hrl)
 BEAMS=$(ERLS:src/%.erl=ebin/%.beam)
 
 ERLC_OPTS = -pa ebin +debug_info
@@ -17,7 +18,7 @@ bin/atomizer: $(BEAMS)
 ebin:
 	mkdir -p ebin
 
-ebin/%.beam: src/%.erl | ebin
+ebin/%.beam: src/%.erl $(HRLS) | ebin
 	erlc $(ERLC_OPTS) -o ebin $<
 
 define erl_build_escript
