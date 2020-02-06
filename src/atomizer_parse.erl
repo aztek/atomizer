@@ -3,16 +3,20 @@
 -include("atomizer.hrl").
 
 -export([
-    parse/3
+    parse_erl/3,
+    parse_beam/2,
+    format_error/1
 ]).
 
--spec parse(pid(), file:filename(), [file:filename()]) -> ok | {error, {module(), atom()}}.
-parse(Pid, Path, IncludePaths) ->
+-type error() :: {file:filename(), no_abstract_code | {module(), atom()}}.
+
+-spec parse_erl(pid(), file:filename(), [file:filename()]) -> ok | {error, {?MODULE, error()}}.
+parse_erl(Pid, Path, IncludePaths) ->
     put(filename, Path),
     put(pid, Pid),
     case epp:open(Path, IncludePaths) of
         {ok, Epp} -> parse_epp(Epp);
-        {error, Error} -> {error, {epp, Error}}
+        {error, Error} -> {error, {?MODULE, {Path, {epp, Error}}}}
     end.
 
 -spec parse_epp(epp:epp_handle()) -> ok.
@@ -35,7 +39,28 @@ parse_epp(Epp) ->
             parse_epp(Epp)
     end.
 
--spec parse_form(erl_parse:abstract_form()) -> ok.
+-spec parse_beam(pid(), file:filename()) -> ok | {error, {?MODULE, error()}}.
+parse_beam(Pid, Path) ->
+    put(filename, Path),
+    put(pid, Pid),
+    case beam_lib:chunks(Path, [abstract_code]) of
+        {ok, {_, [{abstract_code, AbstractCode}]}} ->
+            case AbstractCode of
+                no_abstract_code -> {error, {?MODULE, {Path, no_abstract_code}}};
+                {_, Forms} -> lists:foreach(fun parse_form/1, Forms)
+            end;
+        {error, beam_lib, Error} -> {error, {?MODULE, {Path, {beam_lib, Error}}}}
+    end.
+
+-spec format_error(error()) -> string().
+format_error({Filename, Reason}) ->
+    Message = case Reason of
+                  no_abstract_code -> "file was compiled without the debug_info option";
+                  {Module, Error}  -> Module:format_error(Error)
+              end,
+    io_lib:format("Unable to parse ~s: ~s", [Filename, Message]).
+
+-spec parse_form(erl_parse:abstract_form() | erl_parse:form_info()) -> ok.
 parse_form(Form) -> case Form of
     {attribute, _, module,      _} -> ok;
     {attribute, _, behavior,    _} -> ok;
@@ -51,7 +76,11 @@ parse_form(Form) -> case Form of
     {attribute, _, callback, {_, Ts  }} -> lists:foreach(fun parse_function_type/1, Ts);
     {attribute, _, spec,     {_, Ts  }} -> lists:foreach(fun parse_function_type/1, Ts);
     {attribute, _, _,                _} -> ok; %% TODO: Should we parse custom module attributes?
-    {function,  _, _, _, Cs} -> lists:foreach(fun parse_clause/1, Cs)
+    {function,  _, _, _, Cs} -> lists:foreach(fun parse_clause/1, Cs);
+
+    {eof,     _} -> ok;
+    {error,   _} -> ok;
+    {warning, _} -> ok
 end.
 
 -spec parse_expr(erl_parse:abstract_expr()) -> ok.

@@ -6,6 +6,7 @@
 
 -define(MAX_LEVEL_SYMLINKS, 10).
 -define(ERLANG_EXTENSIONS, [".erl", ".hrl"]).
+-define(BEAM_EXTENSIONS, [".beam"]).
 
 -export([
     traverse/3,
@@ -16,26 +17,22 @@
 -type symlink() :: {Source :: file:filename(), Destination :: file:filename()}.
 -type error()   :: {file:filename() | symlink(), {module(), atom()}}.
 
--spec traverse(pid(), source(), [file:filename()]) -> {done_source, source()} | {error, {?MODULE, error()}}.
+-spec traverse(pid(), source(), [file:filename()]) -> {done_source, source()} | {error, {module(), term()}}.
 traverse(Pid, Source, IncludePaths) ->
     case read_source(Pid, Source, IncludePaths) of
         ok -> Pid ! {done_source, Source};
-        {error, Error} -> Pid ! {?MODULE, Error}
+        {error, Error} -> Pid ! {error, Error}
     end.
 
--spec read_source(pid(), source(), [file:filename()]) -> ok | {error, error()}.
+-spec read_source(pid(), source(), [file:filename()]) -> ok | {error, {module(), term()}}.
 read_source(Pid, Source, IncludePaths) ->
     case Source of
-        {erl, File} ->
-            case atomizer_parse:parse(Pid, File, IncludePaths) of
-                ok -> ok;
-                {error, Error} -> {error, {File, Error}}
-            end;
-
-        {dir, Dir} ->
+        {erl,  File} -> atomizer_parse:parse_erl(Pid, File, IncludePaths);
+        {beam, File} -> atomizer_parse:parse_beam(Pid, File);
+        {dir,  Dir}  ->
             case file:list_dir(Dir) of
-                {ok, Names} -> traverse_paths(Pid, [filename:join(Dir, Name) || Name <- Names]), ok;
-                {error, Error} -> {error, {Dir, {file, Error}}}
+                {ok, Names}    -> traverse_paths(Pid, [filename:join(Dir, Name) || Name <- Names]);
+                {error, Error} -> {error, {?MODULE, {Dir, {file, Error}}}}
             end
     end.
 
@@ -57,12 +54,16 @@ detect_source(Path) ->
         {ok, RealPath} ->
             case file:read_file_info(RealPath) of
                 {ok, Info} ->
-                    Type = case {Info#file_info.type, is_erlang(RealPath)} of
-                               {directory, _}  -> {dir, Path};
-                               {regular, true} -> {erl, Path};
-                               _ -> other
-                           end,
-                    {ok, Type};
+                    Type     = Info#file_info.type,
+                    IsErlang = is_erlang(RealPath),
+                    IsBeam   = is_beam(RealPath),
+                    Source = if
+                                 Type == directory         -> {dir,  Path};
+                                 Type == regular, IsErlang -> {erl,  Path};
+                                 Type == regular, IsBeam   -> {beam, Path};
+                                 true -> other
+                             end,
+                    {ok, Source};
 
                 {error, Error} ->
                     {error, {?MODULE, {{Path, RealPath}, {file, Error}}}}
@@ -94,6 +95,10 @@ resolve_real_path(Path, Fuel) ->
 -spec is_erlang(file:filename()) -> boolean().
 is_erlang(FileName) ->
     lists:any(fun (Ext) -> lists:suffix(Ext, FileName) end, ?ERLANG_EXTENSIONS).
+
+-spec is_beam(file:filename()) -> boolean().
+is_beam(FileName) ->
+    lists:any(fun (Ext) -> lists:suffix(Ext, FileName) end, ?BEAM_EXTENSIONS).
 
 -spec format_error(error()) -> string().
 format_error({{SymlinkSrc, SymlinkDst}, {Module, Error}}) ->

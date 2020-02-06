@@ -13,10 +13,11 @@
 -type verbosity() :: 0 | 1 | 2. % 0 is least verbose, 2 is most verbose
 
 -record(options, {
-    action    = warn :: action(),
-    paths     = []   :: [file:filename()],
-    includes  = []   :: [file:filename()],
-    verbosity = 1    :: verbosity()
+    action     = warn  :: action(),
+    paths      = []    :: [file:filename()],
+    includes   = []    :: [file:filename()],
+    parse_beam = false :: boolean(),
+    verbosity  = 1     :: verbosity()
 }).
 
 -spec main([string()]) -> no_return().
@@ -84,7 +85,10 @@ parse_option(Option, CmdArgs, Options) ->
         _Includes when Option == "i"; Option == "I"; Option == "-include" ->
             parse_includes(CmdArgs, Options);
 
-        _Verbosity when Option == "-v"; Option == "--verbosity" ->
+        _ParseBeam when Option == "b"; Option == "-parse-beam" ->
+            parse_args(CmdArgs, Options#options{parse_beam = true});
+
+        _Verbosity when Option == "v"; Option == "-verbosity" ->
             case parse_verbosity(Option) of
                 {ok, Verbosity, TailCmdArgs} ->
                     parse_args(TailCmdArgs, Options#options{verbosity = Verbosity});
@@ -118,14 +122,15 @@ parse_verbosity([CmdArg | CmdArgs]) ->
     end.
 
 usage() ->
-    "Usage: atomizer [-a | --action ACTION] [-v | --verbosity VERBOSITY] PATH* [-i | --include PATH*]\n".
+    "Usage: atomizer [-a | --action ACTION] [-b | --parse-beam] [-v | --verbosity VERBOSITY]\n" ++
+    "                PATH* [-i | --include PATH*]\n".
 
 help() ->
     "".
 
 -spec run(#options{} | file:filename()) -> ok | {error, term()}.
-run(#options{action = Action, paths = Paths, includes = IncludePaths, verbosity = Verbosity}) ->
-    case atomizer:atomize(Paths, IncludePaths) of
+run(#options{action = Action, paths = Paths, includes = IncludePaths, parse_beam = ParseBeams, verbosity = Verbosity}) ->
+    case atomizer:atomize(Paths, IncludePaths, ParseBeams) of
         {ok, Atoms, Warnings, NrFiles, NrDirs} ->
             SignificantWarnings = sets:filter(fun (Warning) -> is_significant(Atoms, Warning) end, Warnings),
             case Action of
