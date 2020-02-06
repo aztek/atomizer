@@ -8,7 +8,7 @@
     format_error/1
 ]).
 
--type error() :: {file:filename(), no_abstract_code | {module(), atom()}}.
+-type error() :: {file:filename() | location(), no_abstract_code | {module(), atom()}}.
 
 -spec parse_erl(pid(), file:filename(), [file:filename()]) -> ok | {error, {?MODULE, error()}}.
 parse_erl(Pid, Path, IncludePaths) ->
@@ -19,24 +19,21 @@ parse_erl(Pid, Path, IncludePaths) ->
         {error, Error} -> {error, {?MODULE, {Path, {epp, Error}}}}
     end.
 
--spec parse_epp(epp:epp_handle()) -> ok.
+-spec parse_epp(epp:epp_handle()) -> ok | {error, {?MODULE, error()}}.
 parse_epp(Epp) ->
     case epp:parse_erl_form(Epp) of
         {ok, Form} ->
             parse_form(Form),
             parse_epp(Epp);
 
-        {eof, _} -> ok;
-
         {warning, {Line, Module, Warning}} ->
-            ?WARNING("Skipping parts of ~s, unable to parse line ~p: ~s",
-                     [get(filename), Line, Module:format_error(Warning)]),
+            ?WARNING("In ~s line ~p: ~s", [get(filename), Line, Module:format_error(Warning)]),
             parse_epp(Epp);
 
         {error, {Line, Module, Error}} ->
-            ?WARNING("Skipping parts of ~s, unable to parse line ~p: ~s",
-                     [get(filename), Line, Module:format_error(Error)]),
-            parse_epp(Epp)
+            {error, {?MODULE, {{get(filename), Line}, {Module, Error}}}};
+
+        {eof, _} -> ok
     end.
 
 -spec parse_beam(pid(), file:filename()) -> ok | {error, {?MODULE, error()}}.
@@ -53,7 +50,11 @@ parse_beam(Pid, Path) ->
     end.
 
 -spec format_error(error()) -> string().
-format_error({Filename, Reason}) ->
+format_error({Location, Reason}) ->
+    Filename = case Location of
+                   {Path, Line} -> io_lib:format("~s line ~p", [Path, Line]);
+                   Path -> Path
+               end,
     Message = case Reason of
                   no_abstract_code -> "file was compiled without the debug_info option";
                   {Module, Error}  -> Module:format_error(Error)
