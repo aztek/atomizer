@@ -23,12 +23,10 @@
 -type normal_form() :: atom().
 
 -define(CLI_OPTIONS_TABLE, cli).
+-define(CLI_OPTION(Name), element(2, hd(ets:lookup(?CLI_OPTIONS_TABLE, Name)))).
 
--define(ERRORS_AS_WARNINGS,
-        case ets:lookup(?CLI_OPTIONS_TABLE, warn_errors) of
-            [{warn_errors, WarnErrors}] -> WarnErrors;
-            _ -> false
-        end).
+-define(WARN_ERRORS, ?CLI_OPTION(warn_errors)).
+-define(VERBOSITY,   ?CLI_OPTION(verbosity)).
 
 -define(ERROR(Error),
     io:put_chars(standard_error, ["\e[31mError: ", Error, "\e[00m\n"])).
@@ -37,7 +35,10 @@
     ?ERROR(io_lib:format(Format, Args))).
 
 -define(WARNING(Warning),
-    io:put_chars(standard_error, ["\e[33mWarning: ", Warning, "\e[00m\n"])).
+    case ?VERBOSITY of
+        0 -> ok;
+        _ -> io:put_chars(standard_error, ["\e[33mWarning: ", Warning, "\e[00m\n"])
+    end).
 
 -define(WARNING(Format, Args),
     ?WARNING(io_lib:format(Format, Args))).

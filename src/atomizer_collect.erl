@@ -34,7 +34,7 @@ collect_sources(Paths, ParseBeams) ->
                             {ok, {beam, _}} when not ParseBeams -> {ok, Sources};
                             {ok, Source} -> {ok, [Source | Sources]};
                             {error, Error} ->
-                                case ?ERRORS_AS_WARNINGS of
+                                case ?WARN_ERRORS of
                                     true ->
                                         ?WARNING(format_error(Error)),
                                         {ok, Sources};

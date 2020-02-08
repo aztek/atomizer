@@ -22,7 +22,7 @@ traverse(Pid, Source, IncludePaths) ->
     case read_source(Pid, Source, IncludePaths) of
         ok -> Pid ! {done_source, Source};
         {error, {Module, Error}} ->
-            case ?ERRORS_AS_WARNINGS of
+            case ?WARN_ERRORS of
                 true ->
                     ?WARNING(Module:format_error(Error)),
                     Pid ! {done_source, Source};
@@ -53,7 +53,7 @@ traverse_path(Pid, Path) ->
         {ok, other}  -> ignore;
         {ok, Source} -> Pid ! {add_source, Source};
         {error, {Module, Error}} ->
-            case ?ERRORS_AS_WARNINGS of
+            case ?WARN_ERRORS of
                 true ->
                     ?WARNING(Module:format_error(Error)),
                     ignore;

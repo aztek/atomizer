@@ -35,7 +35,7 @@ loop(Pid, Atoms, Warnings, NrParsed) ->
             {ok, Atoms, Warnings, NrFiles, NrDirs};
 
         {error, Error} ->
-            case ?ERRORS_AS_WARNINGS of
+            case ?WARN_ERRORS of
                 true ->
                     ?WARNING(format_error(Error)),
                     loop(Pid, Atoms, Warnings, NrParsed);

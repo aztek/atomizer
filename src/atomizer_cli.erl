@@ -93,7 +93,7 @@ parse_option(Option, CmdArgs, Options) ->
             parse_args(CmdArgs, Options#options{warn_errors = true});
 
         _Verbosity when Option == "v"; Option == "-verbosity" ->
-            case parse_verbosity(Option) of
+            case parse_verbosity(CmdArgs) of
                 {ok, Verbosity, TailCmdArgs} ->
                     parse_args(TailCmdArgs, Options#options{verbosity = Verbosity});
 
@@ -137,13 +137,14 @@ run(#options{action = Action, paths = Paths, includes = IncludePaths, parse_beam
              warn_errors = WarnErrors, verbosity = Verbosity}) ->
     ets:new(?CLI_OPTIONS_TABLE, [set, protected, named_table]),
     ets:insert(?CLI_OPTIONS_TABLE, {warn_errors, WarnErrors}),
+    ets:insert(?CLI_OPTIONS_TABLE, {verbosity, Verbosity}),
     case atomizer:atomize(Paths, IncludePaths, ParseBeams) of
         {ok, Atoms, Warnings, NrFiles, NrDirs} ->
             SignificantWarnings = sets:filter(fun (Warning) -> is_significant(Atoms, Warning) end, Warnings),
             case Action of
-                list -> list_atoms(Atoms, Verbosity);
-                show -> show_atoms(Atoms, Verbosity);
-                warn -> warn_atoms(Atoms, SignificantWarnings, NrFiles, NrDirs, Verbosity)
+                list -> list_atoms(Atoms);
+                show -> show_atoms(Atoms);
+                warn -> warn_atoms(Atoms, SignificantWarnings, NrFiles, NrDirs)
             end,
             ok;
 
@@ -162,32 +163,30 @@ run(Action, Paths) ->
 run(Action, Paths, Verbosity) ->
     run(#options{action = Action, paths = Paths, verbosity = Verbosity}).
 
--spec list_atoms(atoms(), verbosity()) -> ok.
-list_atoms(Atoms, Verbosity) ->
+-spec list_atoms(atoms()) -> ok.
+list_atoms(Atoms) ->
+    Verbosity = ?VERBOSITY,
     case lists:sort(maps:keys(Atoms)) of
         [] when Verbosity > 1 -> io:format("No atoms found.~n", []);
         [] -> ok;
-        Keys -> lists:foreach(fun (Atom) -> list_atom(Atom, maps:get(Atom, Atoms), Verbosity) end, Keys)
+        Keys -> lists:foreach(fun (Atom) -> list_atom(Atom, maps:get(Atom, Atoms)) end, Keys)
     end.
 
--spec list_atom(atom(), locations(), verbosity()) -> ok.
-list_atom(Atom, Locations, Verbosity) ->
+-spec list_atom(atom(), locations()) -> ok.
+list_atom(Atom, Locations) ->
     NrOccurrences = nr_occurrences(Locations),
-    if
-        Verbosity > 1 ->
-            NrFiles = nr_files(Locations),
-            io:format("~p\t~p\t~p~n", [Atom, NrOccurrences, NrFiles]);
-
-        true ->
-            io:format("~p\t~p~n", [Atom, NrOccurrences])
+    case ?VERBOSITY of
+        2 -> io:format("~p\t~p\t~p~n", [Atom, NrOccurrences, nr_files(Locations)]);
+        _ -> io:format("~p\t~p~n",     [Atom, NrOccurrences])
     end.
 
--spec show_atoms(atoms(), verbosity()) -> ok.
-show_atoms(Atoms, Verbosity) ->
-    lists:foreach(fun (Atom) -> show_atom(Atom, maps:get(Atom, Atoms), Verbosity) end,
+-spec show_atoms(atoms()) -> ok.
+show_atoms(Atoms) ->
+    lists:foreach(fun (Atom) -> show_atom(Atom, maps:get(Atom, Atoms)) end,
                   lists:sort(maps:keys(Atoms))).
 
-show_abridged_list(Printer, List, Verbosity) ->
+show_abridged_list(Printer, List) ->
+    Verbosity = ?VERBOSITY,
     PreviewLength = 4,
     case length(List) of
         ListLength when Verbosity =< 1, ListLength > PreviewLength + 1 ->
@@ -197,29 +196,31 @@ show_abridged_list(Printer, List, Verbosity) ->
             lists:foreach(Printer, List)
     end.
 
--spec show_atom(atom(), locations(), verbosity()) -> ok.
-show_atom(Atom, Locations, Verbosity) ->
+-spec show_atom(atom(), locations()) -> ok.
+show_atom(Atom, Locations) ->
     io:format("~n\e[1m~p\e[00m~n", [Atom]),
     Info = [{filename:absname(File), lists:sort(sets:to_list(Positions)), sets:size(Positions)} ||
             {File, Positions} <- maps:to_list(Locations)],
     Files = lists:reverse(lists:keysort(3, Info)),
-    ShowLocation = fun ({File, Positions, NrPositions}) -> show_location(File, Positions, NrPositions, Verbosity) end,
-    show_abridged_list(ShowLocation, Files, Verbosity).
+    ShowLocation = fun ({File, Positions, NrPositions}) -> show_location(File, Positions, NrPositions) end,
+    show_abridged_list(ShowLocation, Files).
 
--spec show_location(file:filename(), [position()], non_neg_integer(), verbosity()) -> ok.
-show_location(File, Positions, _, Verbosity) when Verbosity >= 1 ->
-    ShowPosition = fun (Position) -> io:format("~s:~w~n", [File, Position]) end,
-    show_abridged_list(ShowPosition, Positions, Verbosity);
+-spec show_location(file:filename(), [position()], non_neg_integer()) -> ok.
+show_location(File, Positions, NrPositions) ->
+    case ?VERBOSITY of
+        0 ->
+            io:format("~s \e[3m(~w ~s)\e[00m~n",
+                      [File, NrPositions, plural(NrPositions, "occurrence", "occurrences")]);
+        _ ->
+            ShowPosition = fun (Position) -> io:format("~s:~w~n", [File, Position]) end,
+            show_abridged_list(ShowPosition, Positions)
+    end.
 
-show_location(File, _, NrPositions, _) ->
-    io:format("~s \e[3m(~w ~s)\e[00m~n",
-              [File, NrPositions, plural(NrPositions, "occurrence", "occurrences")]).
-
--spec warn_atoms(atoms(), warnings(), non_neg_integer(), non_neg_integer(), verbosity()) -> ok.
-warn_atoms(Atoms, Warnings, NrFiles, NrDirs, Verbosity) ->
+-spec warn_atoms(atoms(), warnings(), non_neg_integer(), non_neg_integer()) -> ok.
+warn_atoms(Atoms, Warnings, NrFiles, NrDirs) ->
     NrAtoms = maps:size(Atoms),
     NrWarnings = sets:size(Warnings),
-    lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning, Verbosity) end,
+    lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning) end,
                   lists:sort(sets:to_list(Warnings))),
     io:format("Found \e[1m~p\e[00m ~s of similar atoms among "
               "\e[1m~p\e[00m ~s in \e[1m~p\e[00m ~s and \e[1m~p\e[00m ~s.~n",
@@ -231,11 +232,11 @@ warn_atoms(Atoms, Warnings, NrFiles, NrDirs, Verbosity) ->
 plural(1, Singular, _) -> Singular;
 plural(_, _, Plural)   -> Plural.
 
--spec warn_atom(atoms(), warning(), verbosity()) -> ok.
-warn_atom(Atoms, {A, B}, Verbosity) ->
+-spec warn_atom(atoms(), warning()) -> ok.
+warn_atom(Atoms, {A, B}) ->
     io:format("\e[36m\e[1m~p\e[00m\e[36m vs \e[1m~p\e[00m~n", [A, B]),
-    show_atom(A, maps:get(A, Atoms), Verbosity),
-    show_atom(B, maps:get(B, Atoms), Verbosity),
+    show_atom(A, maps:get(A, Atoms)),
+    show_atom(B, maps:get(B, Atoms)),
     io:format("~n~n", []).
 
 -spec is_significant(atoms(), warning()) -> boolean().

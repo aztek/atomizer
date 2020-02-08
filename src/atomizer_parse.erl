@@ -31,7 +31,7 @@ parse_epp(Epp) ->
             parse_epp(Epp);
 
         {error, {Line, Module, Error}} ->
-            case ?ERRORS_AS_WARNINGS of
+            case ?WARN_ERRORS of
                 true ->
                     ?WARNING(format_error({{get(filename), Line}, {Module, Error}})),
                     parse_epp(Epp);
