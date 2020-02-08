@@ -56,12 +56,7 @@ collect_sources(Paths, ParseBeams) ->
 loop(Pid, Collection, Pool, Queue, IncludePaths, ParseBeams) ->
     case {sets:size(Pool), queue:len(Queue)} of
         {0, 0} ->
-            {NrFiles, NrDirs} = sets:fold(fun (Source, {NrFiles, NrDirs}) ->
-                                              case Source of
-                                                  {dir, _} -> {NrFiles, NrDirs + 1};
-                                                  _        -> {NrFiles + 1, NrDirs}
-                                              end
-                                          end, {0, 0}, Collection),
+            {NrFiles, NrDirs} = collected_statistics(Collection),
             {ok, NrFiles, NrDirs};
 
         {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_FILE_LIMIT, QueueSize > 0 ->
@@ -89,6 +84,15 @@ loop(Pid, Collection, Pool, Queue, IncludePaths, ParseBeams) ->
                     {error, Error}
             end
     end.
+
+-spec collected_statistics(sets:set(source())) -> {NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()}.
+collected_statistics(Collection) ->
+    sets:fold(fun (Source, {NrFiles, NrDirs}) ->
+                  case Source of
+                      {dir, _} -> {NrFiles, NrDirs + 1};
+                      _        -> {NrFiles + 1, NrDirs}
+                  end
+              end, {0, 0}, Collection).
 
 -spec format_error({module(), term()}) -> string().
 format_error({Module, Error}) ->
