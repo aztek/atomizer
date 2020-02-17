@@ -1,4 +1,4 @@
-.PHONY: all clean
+.PHONY: all dialyze clean
 
 all: atomizer
 
@@ -33,5 +33,16 @@ EscriptBin = <<"#!/usr/bin/env escript\n" \
 ok = file:write_file("bin/atomizer", EscriptBin), halt().
 endef
 
+DIALYZER_PLT = dialyzer.plt
+export DIALYZER_PLT
+PLT_APPS = erts kernel stdlib 
+DIALYZER_OPTS ?= -Werror_handling -Wrace_conditions
+
+dialyze: $(BEAMS) $(DIALYZER_PLT)
+	dialyzer $(DIALYZER_OPTS) ebin
+
+$(DIALYZER_PLT):
+	dialyzer --build_plt --apps $(PLT_APPS) || test $$? -eq 2
+
 clean:
-	rm -rf bin ebin
+	rm -rf bin ebin dialyzer.plt
