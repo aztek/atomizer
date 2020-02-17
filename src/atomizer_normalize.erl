@@ -1,7 +1,5 @@
 -module(atomizer_normalize).
 
--include_lib("eunit/include/eunit.hrl").
-
 -export([normalize/1]).
 
 -include("atomizer.hrl").
