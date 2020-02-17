@@ -10,7 +10,8 @@ compare(Pid) ->
     NFs = ets:new(nfs, [private, bag]),
     loop(Pid, Atoms, NFs),
     ets:delete(NFs),
-    ets:delete(Atoms).
+    ets:delete(Atoms),
+    ok.
 
 -spec loop(pid(), ets:tid(), ets:tid()) -> ok.
 loop(Pid, Atoms, NFs) ->
