@@ -140,11 +140,10 @@ run(#options{action = Action, paths = Paths, includes = IncludePaths, parse_beam
     ets:insert(?CLI_OPTIONS_TABLE, {verbosity, Verbosity}),
     case atomizer:atomize(Paths, IncludePaths, ParseBeams) of
         {ok, Atoms, Warnings, NrFiles, NrDirs} ->
-            SignificantWarnings = sets:filter(fun (Warning) -> is_significant(Atoms, Warning) end, Warnings),
             case Action of
                 list -> list_atoms(Atoms);
                 show -> show_atoms(Atoms);
-                warn -> warn_atoms(Atoms, SignificantWarnings, NrFiles, NrDirs)
+                warn -> warn_atoms(Atoms, Warnings, NrFiles, NrDirs)
             end,
             ok;
 
@@ -228,7 +227,8 @@ warn_atoms(Atoms, Warnings, NrFiles, NrDirs) ->
                NrAtoms,    plural(NrAtoms,    "atom", "atoms"),
                NrFiles,    plural(NrFiles,    "file", "files"),
                NrDirs,     plural(NrDirs,     "directory", "directories")]).
- 
+
+-spec plural(non_neg_integer(), string(), string()) -> string().
 plural(1, Singular, _) -> Singular;
 plural(_, _, Plural)   -> Plural.
 
@@ -238,23 +238,6 @@ warn_atom(Atoms, {A, B}) ->
     show_atom(A, maps:get(A, Atoms)),
     show_atom(B, maps:get(B, Atoms)),
     io:format("~n~n", []).
-
--spec is_significant(atoms(), warning()) -> boolean().
-is_significant(Atoms, {A, B}) ->
-    LocationsA = maps:get(A, Atoms),
-    LocationsB = maps:get(B, Atoms),
-    NrOccurrenceA = nr_occurrences(LocationsA),
-    NrOccurrenceB = nr_occurrences(LocationsB),
-    {Typo, Min, Max} =
-        if
-             NrOccurrenceA < NrOccurrenceB -> {A, NrOccurrenceA, NrOccurrenceB};
-             true -> {B, NrOccurrenceB, NrOccurrenceA}
-        end,
-    Disproportion = 4,
-    Disproportional = Max / Min > Disproportion,
-    Local = nr_files(maps:get(Typo, Atoms)) == 1,
-    Related = not sets:is_disjoint(sets:from_list(maps:keys(LocationsA)), sets:from_list(maps:keys(LocationsB))),
-    Disproportional andalso Local andalso Related.
 
 -spec nr_files(locations()) -> non_neg_integer().
 nr_files(Locations) -> maps:size(Locations).

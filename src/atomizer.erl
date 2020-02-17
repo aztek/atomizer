@@ -32,7 +32,8 @@ loop(Pid, Atoms, Warnings, NrParsed) ->
 
         done_warnings ->
             {NrFiles, NrDirs} = NrParsed,
-            {ok, Atoms, Warnings, NrFiles, NrDirs};
+            SignificantWarnings = sets:filter(fun (Warning) -> is_significant(Atoms, Warning) end, Warnings),
+            {ok, Atoms, SignificantWarnings, NrFiles, NrDirs};
 
         {error, Error} ->
             case ?WARN_ERRORS of
@@ -51,6 +52,30 @@ add_atom_location(Atom, File, Position, Atoms) ->
     UpdatedPositions = sets:add_element(Position, Positions),
     UpdatedLocations = maps:put(File, UpdatedPositions, Locations),
     maps:put(Atom, UpdatedLocations, Atoms).
+
+-spec is_significant(atoms(), warning()) -> boolean().
+is_significant(Atoms, {A, B}) ->
+    LocationsA = maps:get(A, Atoms),
+    LocationsB = maps:get(B, Atoms),
+    NrOccurrenceA = nr_occurrences(LocationsA),
+    NrOccurrenceB = nr_occurrences(LocationsB),
+    {Typo, Min, Max} =
+    if
+        NrOccurrenceA < NrOccurrenceB -> {A, NrOccurrenceA, NrOccurrenceB};
+        true -> {B, NrOccurrenceB, NrOccurrenceA}
+    end,
+    Disproportion = 4,
+    Disproportional = Max / Min > Disproportion,
+    Local = nr_files(maps:get(Typo, Atoms)) == 1,
+    Related = not sets:is_disjoint(sets:from_list(maps:keys(LocationsA)), sets:from_list(maps:keys(LocationsB))),
+    Disproportional andalso Local andalso Related.
+
+-spec nr_files(locations()) -> non_neg_integer().
+nr_files(Locations) -> maps:size(Locations).
+
+-spec nr_occurrences(locations()) -> non_neg_integer().
+nr_occurrences(Locations) ->
+    maps:fold(fun (_, V, S) -> sets:size(V) + S end, 0, Locations).
 
 -spec format_error({module(), term()}) -> string().
 format_error({Module, Error}) ->
