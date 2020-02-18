@@ -14,9 +14,19 @@
 parse_erl(Pid, Path, IncludePaths) ->
     put(filename, Path),
     put(pid, Pid),
-    case epp:open(Path, IncludePaths) of
-        {ok, Epp} -> parse_epp(Epp);
-        {error, Error} -> {error, {?MODULE, {Path, {epp, Error}}}}
+    case file:open(Path, [read]) of
+        {ok, Fd} ->
+            StartLocation = {1, 1},
+            case epp:open(Path, Fd, StartLocation, IncludePaths, []) of
+                {ok, Epp} ->
+                    parse_epp(Epp);
+
+                {error, Error} ->
+                    {error, {?MODULE, {Path, {epp, Error}}}}
+            end;
+
+        {error, Error} ->
+            {error, {?MODULE, {Path, {file, Error}}}}
     end.
 
 -spec parse_epp(epp:epp_handle()) -> ok | {error, {?MODULE, error()}}.
@@ -58,6 +68,7 @@ parse_beam(Pid, Path) ->
 -spec format_error(error()) -> string().
 format_error({Location, Reason}) ->
     Filename = case Location of
+                   {Path, {Line, Column}} -> io_lib:format("~s line ~p, column ~p", [Path, Line, Column]);
                    {Path, Line} -> io_lib:format("~s line ~p", [Path, Line]);
                    Path -> Path
                end,

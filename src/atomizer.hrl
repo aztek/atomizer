@@ -8,7 +8,10 @@
     normal_form/0
 ]).
 
--type position() :: pos_integer().
+-type line()   :: non_neg_integer().
+-type column() :: non_neg_integer().
+
+-type position() :: line() | {line(), column()}.
 
 -type source() :: {erl,  file:filename()}
                 | {beam, file:filename()}

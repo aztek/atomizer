@@ -211,9 +211,16 @@ show_location(File, Positions, NrPositions) ->
             io:format("~s \e[3m(~w ~s)\e[00m~n",
                       [File, NrPositions, plural(NrPositions, "occurrence", "occurrences")]);
         _ ->
-            ShowPosition = fun (Position) -> io:format("~s:~w~n", [File, Position]) end,
+            ShowPosition = fun (Position) -> io:format("~s:~s~n", [File, show_position(Position)]) end,
             show_abridged_list(ShowPosition, Positions)
     end.
+
+-spec show_position(position()) -> string().
+show_position(Line) when is_integer(Line) ->
+    lists:flatten(io_lib:format("~p", [Line]));
+
+show_position({Line, Column}) ->
+    lists:flatten(io_lib:format("~p:~p", [Line, Column])).
 
 -spec warn_atoms(atoms(), warnings(), non_neg_integer(), non_neg_integer()) -> ok.
 warn_atoms(Atoms, Warnings, NrFiles, NrDirs) ->
