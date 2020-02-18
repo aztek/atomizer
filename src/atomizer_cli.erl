@@ -138,17 +138,24 @@ run(#options{action = Action, paths = Paths, includes = IncludePaths, parse_beam
     ets:new(?CLI_OPTIONS_TABLE, [set, protected, named_table]),
     ets:insert(?CLI_OPTIONS_TABLE, {warn_errors, WarnErrors}),
     ets:insert(?CLI_OPTIONS_TABLE, {verbosity, Verbosity}),
-    case atomizer:atomize(Paths, IncludePaths, ParseBeams) of
-        {ok, Atoms, Warnings, NrFiles, NrDirs} ->
-            case Action of
-                list -> list_atoms(Atoms);
-                show -> show_atoms(Atoms);
-                warn -> warn_atoms(Atoms, Warnings, NrFiles, NrDirs)
-            end,
-            ok;
+    case Action of
+        list ->
+            case atomizer:collect_atoms(Paths, IncludePaths, ParseBeams) of
+                {ok, Atoms} -> list_atoms(Atoms);
+                {error, Error} -> {error, Error}
+            end;
 
-        {error, Error} ->
-            {error, Error}
+        show ->
+            case atomizer:collect_atoms(Paths, IncludePaths, ParseBeams) of
+                {ok, Atoms} -> show_atoms(Atoms);
+                {error, Error} -> {error, Error}
+            end;
+
+        warn ->
+            case atomizer:collect_warnings(Paths, IncludePaths, ParseBeams) of
+                {ok, Atoms, Warnings, NrFiles, NrDirs} -> warn_atoms(Atoms, Warnings, NrFiles, NrDirs);
+                {error, Error} -> {error, Error}
+            end
     end;
 
 run(Path) ->
