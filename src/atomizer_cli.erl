@@ -28,7 +28,7 @@ main(CmdArgs) ->
                     halt(0);
 
                 {error, {Module, Error}} ->
-                    atomizer_lib:error(Module:format_error(Error)),
+                    atomizer:error(Module:format_error(Error)),
                     halt(1)
             end;
 
@@ -37,7 +37,7 @@ main(CmdArgs) ->
             halt(0);
 
         {error, Error} ->
-            atomizer_lib:error(Error),
+            atomizer:error(Error),
             halt(1)
     end.
 
@@ -133,24 +133,24 @@ help() ->
 -spec run(#options{} | file:filename()) -> ok | {error, term()}.
 run(#options{action = Action, paths = Paths, includes = IncludePaths, parse_beam = ParseBeams,
              warn_errors = WarnErrors, verbosity = Verbosity}) ->
-    atomizer_lib:cli_init(),
-    atomizer_lib:cli_set_warn_errors(WarnErrors),
-    atomizer_lib:cli_set_verbosity(Verbosity),
+    atomizer:cli_init(),
+    atomizer:cli_set_warn_errors(WarnErrors),
+    atomizer:cli_set_verbosity(Verbosity),
     case Action of
         list ->
-            case atomizer:collect_atoms(Paths, IncludePaths, ParseBeams) of
+            case atomizer_sup:collect_atoms(Paths, IncludePaths, ParseBeams) of
                 {ok, Atoms} -> list_atoms(Atoms);
                 {error, Error} -> {error, Error}
             end;
 
         show ->
-            case atomizer:collect_atoms(Paths, IncludePaths, ParseBeams) of
+            case atomizer_sup:collect_atoms(Paths, IncludePaths, ParseBeams) of
                 {ok, Atoms} -> show_atoms(Atoms);
                 {error, Error} -> {error, Error}
             end;
 
         warn ->
-            case atomizer:collect_warnings(Paths, IncludePaths, ParseBeams) of
+            case atomizer_sup:collect_warnings(Paths, IncludePaths, ParseBeams) of
                 {ok, Atoms, Warnings, NrFiles, NrDirs} -> warn_atoms(Atoms, Warnings, NrFiles, NrDirs);
                 {error, Error} -> {error, Error}
             end
@@ -167,30 +167,30 @@ run(Action, Paths) ->
 run(Action, Paths, Verbosity) ->
     run(#options{action = Action, paths = Paths, verbosity = Verbosity}).
 
--spec list_atoms(atomizer_lib:atoms()) -> ok.
+-spec list_atoms(atomizer:atoms()) -> ok.
 list_atoms(Atoms) ->
-    Verbosity = atomizer_lib:cli_get_verbosity(),
+    Verbosity = atomizer:cli_get_verbosity(),
     case lists:sort(maps:keys(Atoms)) of
         [] when Verbosity > 1 -> io:format("No atoms found.~n", []);
         [] -> ok;
         Keys -> lists:foreach(fun (Atom) -> list_atom(Atom, maps:get(Atom, Atoms)) end, Keys)
     end.
 
--spec list_atom(atom(), atomizer_lib:locations()) -> ok.
+-spec list_atom(atom(), atomizer:locations()) -> ok.
 list_atom(Atom, Locations) ->
-    NrOccurrences = atomizer_lib:nr_occurrences(Locations),
-    case atomizer_lib:cli_get_verbosity() of
-        2 -> io:format("~p\t~p\t~p~n", [Atom, NrOccurrences, atomizer_lib:nr_files(Locations)]);
+    NrOccurrences = atomizer:nr_occurrences(Locations),
+    case atomizer:cli_get_verbosity() of
+        2 -> io:format("~p\t~p\t~p~n", [Atom, NrOccurrences, atomizer:nr_files(Locations)]);
         _ -> io:format("~p\t~p~n",     [Atom, NrOccurrences])
     end.
 
--spec show_atoms(atomizer_lib:atoms()) -> ok.
+-spec show_atoms(atomizer:atoms()) -> ok.
 show_atoms(Atoms) ->
     lists:foreach(fun (Atom) -> show_atom(Atom, maps:get(Atom, Atoms)) end,
                   lists:sort(maps:keys(Atoms))).
 
 show_abridged_list(Printer, List) ->
-    Verbosity = atomizer_lib:cli_get_verbosity(),
+    Verbosity = atomizer:cli_get_verbosity(),
     PreviewLength = 4,
     case length(List) of
         ListLength when Verbosity =< 1, ListLength > PreviewLength + 1 ->
@@ -200,7 +200,7 @@ show_abridged_list(Printer, List) ->
             lists:foreach(Printer, List)
     end.
 
--spec show_atom(atom(), atomizer_lib:locations()) -> ok.
+-spec show_atom(atom(), atomizer:locations()) -> ok.
 show_atom(Atom, Locations) ->
     io:format("~n\e[1m~p\e[00m~n", [Atom]),
     Info = [{filename:absname(File), lists:sort(sets:to_list(Positions)), sets:size(Positions)} ||
@@ -209,25 +209,25 @@ show_atom(Atom, Locations) ->
     ShowLocation = fun ({File, Positions, NrPositions}) -> show_location(File, Positions, NrPositions) end,
     show_abridged_list(ShowLocation, Files).
 
--spec show_location(file:filename(), [atomizer_lib:position()], non_neg_integer()) -> ok.
+-spec show_location(file:filename(), [atomizer:position()], non_neg_integer()) -> ok.
 show_location(File, Positions, NrPositions) ->
-    case atomizer_lib:cli_get_verbosity() of
+    case atomizer:cli_get_verbosity() of
         0 ->
             io:format("~s \e[3m(~w ~s)\e[00m~n",
-                      [File, NrPositions, atomizer_lib:plural(NrPositions, "occurrence", "occurrences")]);
+                      [File, NrPositions, atomizer:plural(NrPositions, "occurrence", "occurrences")]);
         _ ->
             ShowPosition = fun (Position) -> io:format("~s:~s~n", [File, show_position(Position)]) end,
             show_abridged_list(ShowPosition, Positions)
     end.
 
--spec show_position(atomizer_lib:position()) -> string().
+-spec show_position(atomizer:position()) -> string().
 show_position(Line) when is_integer(Line) ->
     lists:flatten(io_lib:format("~p", [Line]));
 
 show_position({Line, Column}) ->
     lists:flatten(io_lib:format("~p:~p", [Line, Column])).
 
--spec warn_atoms(atomizer_lib:atoms(), atomizer_lib:warnings(), non_neg_integer(), non_neg_integer()) -> ok.
+-spec warn_atoms(atomizer:atoms(), atomizer:warnings(), non_neg_integer(), non_neg_integer()) -> ok.
 warn_atoms(Atoms, Warnings, NrFiles, NrDirs) ->
     NrAtoms = maps:size(Atoms),
     NrWarnings = sets:size(Warnings),
@@ -235,12 +235,12 @@ warn_atoms(Atoms, Warnings, NrFiles, NrDirs) ->
                   lists:sort(sets:to_list(Warnings))),
     io:format("Found \e[1m~p\e[00m ~s of similar atoms among "
               "\e[1m~p\e[00m ~s in \e[1m~p\e[00m ~s and \e[1m~p\e[00m ~s.~n",
-              [NrWarnings, atomizer_lib:plural(NrWarnings, "pair", "pairs"),
-               NrAtoms,    atomizer_lib:plural(NrAtoms,    "atom", "atoms"),
-               NrFiles,    atomizer_lib:plural(NrFiles,    "file", "files"),
-               NrDirs,     atomizer_lib:plural(NrDirs,     "directory", "directories")]).
+              [NrWarnings, atomizer:plural(NrWarnings, "pair", "pairs"),
+               NrAtoms, atomizer:plural(NrAtoms, "atom", "atoms"),
+               NrFiles, atomizer:plural(NrFiles, "file", "files"),
+               NrDirs, atomizer:plural(NrDirs, "directory", "directories")]).
 
--spec warn_atom(atomizer_lib:atoms(), atomizer_lib:warning()) -> ok.
+-spec warn_atom(atomizer:atoms(), atomizer:warning()) -> ok.
 warn_atom(Atoms, {A, B}) ->
     io:format("\e[36m\e[1m~p\e[00m\e[36m vs \e[1m~p\e[00m~n", [A, B]),
     show_atom(A, maps:get(A, Atoms)),
