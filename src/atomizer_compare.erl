@@ -1,7 +1,5 @@
 -module(atomizer_compare).
 
--include("atomizer.hrl").
-
 -export([compare/1]).
 
 -spec compare(pid()) -> ok.

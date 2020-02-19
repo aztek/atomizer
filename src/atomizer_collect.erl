@@ -1,7 +1,5 @@
 -module(atomizer_collect).
 
--include("atomizer.hrl").
-
 -include_lib("kernel/include/file.hrl").
 
 -define(OPEN_FILE_LIMIT, 10).
@@ -25,7 +23,7 @@ collect_paths(Pid, Paths, IncludePaths, ParseBeams) ->
         {error, Error} -> {error, Error}
     end.
 
--spec collect_sources([file:filename()], boolean()) -> {ok, [source()]} | {error, term()}.
+-spec collect_sources([file:filename()], boolean()) -> {ok, [atomizer_lib:source()]} | {error, term()}.
 collect_sources(Paths, ParseBeams) ->
     lists:foldl(fun (_, {error, Error}) -> {error, Error};
                     (Path, {ok, Sources}) ->
@@ -34,9 +32,9 @@ collect_sources(Paths, ParseBeams) ->
                             {ok, {beam, _}} when not ParseBeams -> {ok, Sources};
                             {ok, Source} -> {ok, [Source | Sources]};
                             {error, Error} ->
-                                case ?WARN_ERRORS of
+                                case atomizer_lib:cli_get_warn_errors() of
                                     true ->
-                                        ?WARNING(format_error(Error)),
+                                        atomizer_lib:warning(format_error(Error)),
                                         {ok, Sources};
                                     false ->
                                         {error, Error}
@@ -48,9 +46,9 @@ collect_sources(Paths, ParseBeams) ->
 -spec loop(pid(), Collection, Pool, Queue, IncludePaths, ParseBeams) -> {ok, NrFiles, NrDirs} | {error, term()} when
     NrFiles      :: non_neg_integer(),
     NrDirs       :: non_neg_integer(),
-    Collection   :: sets:set(source()),
-    Pool         :: sets:set(source()),
-    Queue        :: queue:queue(source()),
+    Collection   :: sets:set(atomizer_lib:source()),
+    Pool         :: sets:set(atomizer_lib:source()),
+    Queue        :: queue:queue(atomizer_lib:source()),
     IncludePaths :: [file:filename()],
     ParseBeams   :: boolean().
 loop(Pid, Collection, Pool, Queue, IncludePaths, ParseBeams) ->
@@ -85,7 +83,7 @@ loop(Pid, Collection, Pool, Queue, IncludePaths, ParseBeams) ->
             end
     end.
 
--spec collected_statistics(sets:set(source())) -> {NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()}.
+-spec collected_statistics(sets:set(atomizer_lib:source())) -> {NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()}.
 collected_statistics(Collection) ->
     sets:fold(fun (Source, {NrFiles, NrDirs}) ->
                   case Source of

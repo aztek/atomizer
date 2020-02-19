@@ -1,7 +1,5 @@
 -module(atomizer_traverse).
 
--include("atomizer.hrl").
-
 -include_lib("kernel/include/file.hrl").
 
 -define(MAX_LEVEL_SYMLINKS, 10).
@@ -17,21 +15,21 @@
 -type symlink() :: {Source :: file:filename(), Destination :: file:filename()}.
 -type error()   :: {file:filename() | symlink(), {module(), atom()}}.
 
--spec traverse(pid(), source(), [file:filename()]) -> {done_source, source()} | {error, {module(), term()}}.
+-spec traverse(pid(), atomizer_lib:source(), [file:filename()]) -> {done_source, atomizer_lib:source()} | {error, {module(), term()}}.
 traverse(Pid, Source, IncludePaths) ->
     case read_source(Pid, Source, IncludePaths) of
         ok -> Pid ! {done_source, Source};
         {error, {Module, Error}} ->
-            case ?WARN_ERRORS of
+            case atomizer_lib:cli_get_warn_errors() of
                 true ->
-                    ?WARNING(Module:format_error(Error)),
+                    atomizer_lib:warning(Module:format_error(Error)),
                     Pid ! {done_source, Source};
                 false ->
                     Pid ! {error, {Module, Error}}
             end
     end.
 
--spec read_source(pid(), source(), [file:filename()]) -> ok | {error, {module(), term()}}.
+-spec read_source(pid(), atomizer_lib:source(), [file:filename()]) -> ok | {error, {module(), term()}}.
 read_source(Pid, Source, IncludePaths) ->
     case Source of
         {erl,  File} -> atomizer_parse:parse_erl(Pid, File, IncludePaths);
@@ -47,22 +45,22 @@ read_source(Pid, Source, IncludePaths) ->
 traverse_paths(Pid, Paths) ->
     lists:foreach(fun (Path) -> traverse_path(Pid, Path) end, Paths).
 
--spec traverse_path(pid(), file:filename()) -> ignore | {add_source, source()} | {error, error()}.
+-spec traverse_path(pid(), file:filename()) -> ignore | {add_source, atomizer_lib:source()} | {error, error()}.
 traverse_path(Pid, Path) ->
     case detect_source(Path) of
         {ok, other}  -> ignore;
         {ok, Source} -> Pid ! {add_source, Source};
         {error, {Module, Error}} ->
-            case ?WARN_ERRORS of
+            case atomizer_lib:cli_get_warn_errors() of
                 true ->
-                    ?WARNING(Module:format_error(Error)),
+                    atomizer_lib:warning(Module:format_error(Error)),
                     ignore;
                 false ->
                     {error, {Module, Error}}
             end
     end.
 
--spec detect_source(file:filename()) -> {ok, source() | other} | {error, {?MODULE, error()}}.
+-spec detect_source(file:filename()) -> {ok, atomizer_lib:source() | other} | {error, {?MODULE, error()}}.
 detect_source(Path) ->
     case resolve_real_path(Path) of
         {ok, RealPath} ->

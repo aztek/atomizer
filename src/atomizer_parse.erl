@@ -1,14 +1,12 @@
 -module(atomizer_parse).
 
--include("atomizer.hrl").
-
 -export([
     parse_erl/3,
     parse_beam/2,
     format_error/1
 ]).
 
--type error() :: {file:filename() | location(), no_abstract_code | {module(), atom()}}.
+-type error() :: {file:filename() | atomizer_lib:location(), no_abstract_code | {module(), atom()}}.
 
 -spec parse_erl(pid(), file:filename(), [file:filename()]) -> ok | {error, {?MODULE, error()}}.
 parse_erl(Pid, Path, IncludePaths) ->
@@ -37,13 +35,13 @@ parse_epp(Epp) ->
             parse_epp(Epp);
 
         {warning, {Line, Module, Warning}} ->
-            ?WARNING("In ~s line ~p: ~s", [get(filename), Line, Module:format_error(Warning)]),
+            atomizer_lib:warning("In ~s line ~p: ~s", [get(filename), Line, Module:format_error(Warning)]),
             parse_epp(Epp);
 
         {error, {Line, Module, Error}} ->
-            case ?WARN_ERRORS of
+            case atomizer_lib:cli_get_warn_errors() of
                 true ->
-                    ?WARNING(format_error({{get(filename), Line}, {Module, Error}})),
+                    atomizer_lib:warning(format_error({{get(filename), Line}, {Module, Error}})),
                     parse_epp(Epp);
                 false ->
                     {error, {?MODULE, {{get(filename), Line}, {Module, Error}}}}
