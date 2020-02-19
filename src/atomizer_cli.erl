@@ -176,7 +176,7 @@ list_atoms(Atoms) ->
         Keys -> lists:foreach(fun (Atom) -> list_atom(Atom, maps:get(Atom, Atoms)) end, Keys)
     end.
 
--spec list_atom(atomizer_lib:atom(), atomizer_lib:locations()) -> ok.
+-spec list_atom(atom(), atomizer_lib:locations()) -> ok.
 list_atom(Atom, Locations) ->
     NrOccurrences = atomizer_lib:nr_occurrences(Locations),
     case atomizer_lib:cli_get_verbosity() of

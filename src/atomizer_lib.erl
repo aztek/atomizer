@@ -24,6 +24,7 @@
     source/0,
     atoms/0,
     location/0,
+    locations/0,
     position/0,
     warning/0,
     warnings/0,
