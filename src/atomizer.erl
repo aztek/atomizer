@@ -82,8 +82,8 @@ add_atom_location(Atom, File, Position, Atoms) ->
 is_significant(Atoms, {A, B}) ->
     LocationsA = maps:get(A, Atoms),
     LocationsB = maps:get(B, Atoms),
-    NrOccurrenceA = nr_occurrences(LocationsA),
-    NrOccurrenceB = nr_occurrences(LocationsB),
+    NrOccurrenceA = atomizer_lib:nr_occurrences(LocationsA),
+    NrOccurrenceB = atomizer_lib:nr_occurrences(LocationsB),
     {Typo, Min, Max} =
     if
         NrOccurrenceA < NrOccurrenceB -> {A, NrOccurrenceA, NrOccurrenceB};
@@ -91,16 +91,9 @@ is_significant(Atoms, {A, B}) ->
     end,
     Disproportion = 4,
     Disproportional = Max / Min > Disproportion,
-    Local = nr_files(maps:get(Typo, Atoms)) == 1,
+    Local = atomizer_lib:nr_files(maps:get(Typo, Atoms)) == 1,
     Related = not sets:is_disjoint(sets:from_list(maps:keys(LocationsA)), sets:from_list(maps:keys(LocationsB))),
     Disproportional andalso Local andalso Related.
-
--spec nr_files(atomizer_lib:locations()) -> non_neg_integer().
-nr_files(Locations) -> maps:size(Locations).
-
--spec nr_occurrences(atomizer_lib:locations()) -> non_neg_integer().
-nr_occurrences(Locations) ->
-    maps:fold(fun (_, V, S) -> sets:size(V) + S end, 0, Locations).
 
 -spec format_error({module(), term()}) -> string().
 format_error({Module, Error}) ->

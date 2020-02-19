@@ -178,9 +178,9 @@ list_atoms(Atoms) ->
 
 -spec list_atom(atomizer_lib:atom(), atomizer_lib:locations()) -> ok.
 list_atom(Atom, Locations) ->
-    NrOccurrences = nr_occurrences(Locations),
+    NrOccurrences = atomizer_lib:nr_occurrences(Locations),
     case atomizer_lib:cli_get_verbosity() of
-        2 -> io:format("~p\t~p\t~p~n", [Atom, NrOccurrences, nr_files(Locations)]);
+        2 -> io:format("~p\t~p\t~p~n", [Atom, NrOccurrences, atomizer_lib:nr_files(Locations)]);
         _ -> io:format("~p\t~p~n",     [Atom, NrOccurrences])
     end.
 
@@ -214,7 +214,7 @@ show_location(File, Positions, NrPositions) ->
     case atomizer_lib:cli_get_verbosity() of
         0 ->
             io:format("~s \e[3m(~w ~s)\e[00m~n",
-                      [File, NrPositions, plural(NrPositions, "occurrence", "occurrences")]);
+                      [File, NrPositions, atomizer_lib:plural(NrPositions, "occurrence", "occurrences")]);
         _ ->
             ShowPosition = fun (Position) -> io:format("~s:~s~n", [File, show_position(Position)]) end,
             show_abridged_list(ShowPosition, Positions)
@@ -235,14 +235,10 @@ warn_atoms(Atoms, Warnings, NrFiles, NrDirs) ->
                   lists:sort(sets:to_list(Warnings))),
     io:format("Found \e[1m~p\e[00m ~s of similar atoms among "
               "\e[1m~p\e[00m ~s in \e[1m~p\e[00m ~s and \e[1m~p\e[00m ~s.~n",
-              [NrWarnings, plural(NrWarnings, "pair", "pairs"),
-               NrAtoms,    plural(NrAtoms,    "atom", "atoms"),
-               NrFiles,    plural(NrFiles,    "file", "files"),
-               NrDirs,     plural(NrDirs,     "directory", "directories")]).
-
--spec plural(non_neg_integer(), string(), string()) -> string().
-plural(1, Singular, _) -> Singular;
-plural(_, _, Plural)   -> Plural.
+              [NrWarnings, atomizer_lib:plural(NrWarnings, "pair", "pairs"),
+               NrAtoms,    atomizer_lib:plural(NrAtoms,    "atom", "atoms"),
+               NrFiles,    atomizer_lib:plural(NrFiles,    "file", "files"),
+               NrDirs,     atomizer_lib:plural(NrDirs,     "directory", "directories")]).
 
 -spec warn_atom(atomizer_lib:atoms(), atomizer_lib:warning()) -> ok.
 warn_atom(Atoms, {A, B}) ->
@@ -250,10 +246,3 @@ warn_atom(Atoms, {A, B}) ->
     show_atom(A, maps:get(A, Atoms)),
     show_atom(B, maps:get(B, Atoms)),
     io:format("~n~n", []).
-
--spec nr_files(atomizer_lib:locations()) -> non_neg_integer().
-nr_files(Locations) -> maps:size(Locations).
-
--spec nr_occurrences(atomizer_lib:locations()) -> non_neg_integer().
-nr_occurrences(Locations) ->
-    maps:fold(fun (_, V, S) -> sets:size(V) + S end, 0, Locations).

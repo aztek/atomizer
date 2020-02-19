@@ -9,10 +9,15 @@
     cli_set_verbosity/1,
     cli_get_verbosity/0,
 
+    nr_files/1,
+    nr_occurrences/1,
+
     error/1,
     error/2,
     warning/1,
-    warning/2
+    warning/2,
+
+    plural/3
 ]).
 
 -export_type([
@@ -25,17 +30,10 @@
     normal_form/0
 ]).
 
--type line()   :: non_neg_integer().
--type column() :: non_neg_integer().
-
--type position() :: line() | {line(), column()}.
-
 -type source() :: {erl,  file:filename()}
                 | {beam, file:filename()}
                 | {dir,  file:filename()}.
 
--type location()  :: {file:filename(), position()}.
--type locations() :: #{file:filename() => sets:set(position())}.
 -type atoms()     :: #{atom() => locations()}.
 -type warning()   :: {atom(), atom()}.
 -type warnings()  :: sets:set(warning()).
@@ -68,6 +66,22 @@ cli_set_verbosity(Value) -> cli_set(?CLI_VERBOSITY, Value).
 cli_get_verbosity() -> cli_get(?CLI_VERBOSITY, 2).
 
 
+%%% Locations
+
+-type line()      :: non_neg_integer().
+-type column()    :: non_neg_integer().
+-type position()  :: line() | {line(), column()}.
+-type location()  :: {file:filename(), position()}.
+-type locations() :: #{file:filename() => sets:set(position())}.
+
+-spec nr_files(atomizer_lib:locations()) -> non_neg_integer().
+nr_files(Locations) -> maps:size(Locations).
+
+-spec nr_occurrences(atomizer_lib:locations()) -> non_neg_integer().
+nr_occurrences(Locations) ->
+    maps:fold(fun (_, V, S) -> sets:size(V) + S end, 0, Locations).
+
+
 %%% Error reporting
 
 -spec error(string()) -> ok.
@@ -88,3 +102,10 @@ warning(Warning) ->
 -spec warning(string(), [term()]) -> ok.
 warning(Format, Args) ->
     warning(io_lib:format(Format, Args)).
+
+
+%%% Miscellaneous
+
+-spec plural(non_neg_integer(), string(), string()) -> string().
+plural(1, Singular, _) -> Singular;
+plural(_, _, Plural)   -> Plural.
