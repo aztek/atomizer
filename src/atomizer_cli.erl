@@ -33,7 +33,7 @@ main(CmdArgs) ->
             end;
 
         {message, Message} ->
-            io:format("~s~n", [Message]),
+            atomizer:print(Message),
             halt(0);
 
         {error, Error} ->
@@ -171,7 +171,7 @@ run(Action, Paths, Verbosity) ->
 list_atoms(Atoms) ->
     Verbosity = atomizer:cli_get_verbosity(),
     case lists:sort(maps:keys(Atoms)) of
-        [] when Verbosity > 1 -> io:format("No atoms found.~n", []);
+        [] when Verbosity > 1 -> atomizer:print("No atoms found.");
         [] -> ok;
         Keys -> lists:foreach(fun (Atom) -> list_atom(Atom, maps:get(Atom, Atoms)) end, Keys)
     end.
@@ -180,8 +180,8 @@ list_atoms(Atoms) ->
 list_atom(Atom, Locations) ->
     NrOccurrences = atomizer:nr_occurrences(Locations),
     case atomizer:cli_get_verbosity() of
-        2 -> io:format("~p\t~p\t~p~n", [Atom, NrOccurrences, atomizer:nr_files(Locations)]);
-        _ -> io:format("~p\t~p~n",     [Atom, NrOccurrences])
+        2 -> atomizer:print("~p\t~p\t~p", [Atom, NrOccurrences, atomizer:nr_files(Locations)]);
+        _ -> atomizer:print("~p\t~p",     [Atom, NrOccurrences])
     end.
 
 -spec show_atoms(atomizer:atoms()) -> ok.
@@ -195,14 +195,14 @@ show_abridged_list(Printer, List) ->
     case length(List) of
         ListLength when Verbosity =< 1, ListLength > PreviewLength + 1 ->
             lists:foreach(Printer, lists:sublist(List, PreviewLength)),
-            io:format("\e[3m... (~p more)\e[00m~n", [ListLength - PreviewLength]);
+            atomizer:print("\e[3m... (~p more)\e[00m", [ListLength - PreviewLength]);
         _ ->
             lists:foreach(Printer, List)
     end.
 
 -spec show_atom(atom(), atomizer:locations()) -> ok.
 show_atom(Atom, Locations) ->
-    io:format("~n\e[1m~p\e[00m~n", [Atom]),
+    atomizer:print("~n\e[1m~p\e[00m", [Atom]),
     Info = [{filename:absname(File), lists:sort(sets:to_list(Positions)), sets:size(Positions)} ||
             {File, Positions} <- maps:to_list(Locations)],
     Files = lists:reverse(lists:keysort(3, Info)),
@@ -213,19 +213,19 @@ show_atom(Atom, Locations) ->
 show_location(File, Positions, NrPositions) ->
     case atomizer:cli_get_verbosity() of
         0 ->
-            io:format("~s \e[3m(~w ~s)\e[00m~n",
-                      [File, NrPositions, atomizer:plural(NrPositions, "occurrence", "occurrences")]);
+            atomizer:print("~s \e[3m(~w ~s)\e[00m",
+                           [File, NrPositions, atomizer:plural(NrPositions, "occurrence", "occurrences")]);
         _ ->
-            ShowPosition = fun (Position) -> io:format("~s:~s~n", [File, show_position(Position)]) end,
+            ShowPosition = fun (Position) -> atomizer:print([File, ":" | show_position(Position)]) end,
             show_abridged_list(ShowPosition, Positions)
     end.
 
--spec show_position(atomizer:position()) -> string().
+-spec show_position(atomizer:position()) -> io_lib:chars().
 show_position(Line) when is_integer(Line) ->
-    lists:flatten(io_lib:format("~p", [Line]));
+    io_lib:format("~p", [Line]);
 
 show_position({Line, Column}) ->
-    lists:flatten(io_lib:format("~p:~p", [Line, Column])).
+    io_lib:format("~p:~p", [Line, Column]).
 
 -spec warn_atoms(atomizer:atoms(), atomizer:warnings(), non_neg_integer(), non_neg_integer()) -> ok.
 warn_atoms(Atoms, Warnings, NrFiles, NrDirs) ->
@@ -233,16 +233,16 @@ warn_atoms(Atoms, Warnings, NrFiles, NrDirs) ->
     NrWarnings = sets:size(Warnings),
     lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning) end,
                   lists:sort(sets:to_list(Warnings))),
-    io:format("Found \e[1m~p\e[00m ~s of similar atoms among "
-              "\e[1m~p\e[00m ~s in \e[1m~p\e[00m ~s and \e[1m~p\e[00m ~s.~n",
-              [NrWarnings, atomizer:plural(NrWarnings, "pair", "pairs"),
-               NrAtoms, atomizer:plural(NrAtoms, "atom", "atoms"),
-               NrFiles, atomizer:plural(NrFiles, "file", "files"),
-               NrDirs, atomizer:plural(NrDirs, "directory", "directories")]).
+    atomizer:print("Found \e[1m~p\e[00m ~s of similar atoms among "
+                   "\e[1m~p\e[00m ~s in \e[1m~p\e[00m ~s and \e[1m~p\e[00m ~s.",
+                   [NrWarnings, atomizer:plural(NrWarnings, "pair",      "pairs"),
+                    NrAtoms,    atomizer:plural(NrAtoms,    "atom",      "atoms"),
+                    NrFiles,    atomizer:plural(NrFiles,    "file",      "files"),
+                    NrDirs,     atomizer:plural(NrDirs,     "directory", "directories")]).
 
 -spec warn_atom(atomizer:atoms(), atomizer:warning()) -> ok.
 warn_atom(Atoms, {A, B}) ->
-    io:format("\e[36m\e[1m~p\e[00m\e[36m vs \e[1m~p\e[00m~n", [A, B]),
+    atomizer:print("\e[36m\e[1m~p\e[00m\e[36m vs \e[1m~p\e[00m", [A, B]),
     show_atom(A, maps:get(A, Atoms)),
     show_atom(B, maps:get(B, Atoms)),
-    io:format("~n~n", []).
+    atomizer:print("\n").

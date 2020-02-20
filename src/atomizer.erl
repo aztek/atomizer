@@ -12,6 +12,8 @@
     nr_files/1,
     nr_occurrences/1,
 
+    print/1,
+    print/2,
     error/1,
     error/2,
     warning/1,
@@ -83,9 +85,15 @@ nr_occurrences(Locations) ->
     maps:fold(fun (_, V, S) -> sets:size(V) + S end, 0, Locations).
 
 
-%%% Error reporting
+%%% Printing to standard outputs
 
--spec error(string()) -> ok.
+print(Message) ->
+    io:put_chars(standard_io, [Message, "\n"]).
+
+print(Format, Args) ->
+    ?MODULE:print(io_lib:format(Format, Args)).
+
+-spec error(io_lib:chars()) -> ok.
 error(Error) ->
     io:put_chars(standard_error, ["\e[31mError: ", Error, "\e[00m\n"]).
 
@@ -93,7 +101,7 @@ error(Error) ->
 error(Format, Args) ->
     ?MODULE:error(io_lib:format(Format, Args)).
 
--spec warning(string()) -> ok.
+-spec warning(io_lib:chars()) -> ok.
 warning(Warning) ->
     case cli_get_verbosity() of
         0 -> ok;
