@@ -88,14 +88,14 @@ nr_occurrences(Locations) ->
 %%% Printing to standard outputs
 
 print(Message) ->
-    io:put_chars(standard_io, [Message, "\n"]).
+    atomizer_output:put_chars(standard_io, [Message, "\n"]).
 
 print(Format, Args) ->
     ?MODULE:print(io_lib:format(Format, Args)).
 
 -spec error(io_lib:chars()) -> ok.
 error(Error) ->
-    io:put_chars(standard_error, ["\e[31mError: ", Error, "\e[00m\n"]).
+    atomizer_output:put_chars(standard_error, ["\e[31mError: ", Error, "\e[00m\n"]).
 
 -spec error(string(), [term()]) -> ok.
 error(Format, Args) ->
@@ -105,7 +105,7 @@ error(Format, Args) ->
 warning(Warning) ->
     case cli_get_verbosity() of
         0 -> ok;
-        _ -> io:put_chars(standard_error, ["\e[33mWarning: ", Warning, "\e[00m\n"])
+        _ -> atomizer_output:put_chars(standard_error, ["\e[33mWarning: ", Warning, "\e[00m\n"])
     end.
 
 -spec warning(string(), [term()]) -> ok.

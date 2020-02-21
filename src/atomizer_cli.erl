@@ -21,6 +21,7 @@
 
 -spec main([string()]) -> no_return().
 main(CmdArgs) ->
+    atomizer_output:start(),
     case parse_args(CmdArgs) of
         {options, Options} ->
             case run(Options) of

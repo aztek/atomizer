@@ -30,7 +30,12 @@ collect_sources(Paths, ParseBeams) ->
                         case atomizer_traverse:detect_source(Path) of
                             {ok, other} -> {ok, Sources};
                             {ok, {beam, _}} when not ParseBeams -> {ok, Sources};
-                            {ok, Source} -> {ok, [Source | Sources]};
+                            {ok, Source} ->
+                                case Source of
+                                    {dir, _} -> ok;
+                                    _ -> atomizer_progress:increase_total(1)
+                                end,
+                                {ok, [Source | Sources]};
                             {error, Error} ->
                                 case atomizer:cli_get_warn_errors() of
                                     true ->
@@ -65,6 +70,10 @@ loop(Pid, Collection, Pool, Queue, IncludePaths, ParseBeams) ->
         _ ->
             receive
                 {add_source, Source = {Type, _}} ->
+                    case Source of
+                        {dir, _} -> ok;
+                        _ -> atomizer_progress:increase_total(1)
+                    end,
                     SkipSource = sets:is_element(Source, Pool) orelse
                                  sets:is_element(Source, Collection) orelse
                                  (not ParseBeams andalso (Type == beam)),
@@ -76,6 +85,10 @@ loop(Pid, Collection, Pool, Queue, IncludePaths, ParseBeams) ->
                     loop(Pid, Collection, Pool, Queue, IncludePaths, ParseBeams);
 
                 {done_source, Source} ->
+                    case Source of
+                        {dir, _} -> ok;
+                        _ -> atomizer_progress:increase_elapsed(1)
+                    end,
                     loop(Pid, sets:add_element(Source, Collection), sets:del_element(Source, Pool), Queue, IncludePaths, ParseBeams);
 
                 {error, Error} ->
