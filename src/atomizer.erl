@@ -19,6 +19,13 @@
     warning/1,
     warning/2,
 
+    pretty_atom/1,
+    red/1,
+    yellow/1,
+    cyan/1,
+    bold/1,
+    italic/1,
+    words/1,
     plural/3
 ]).
 
@@ -95,7 +102,7 @@ print(Format, Args) ->
 
 -spec error(io_lib:chars()) -> ok.
 error(Error) ->
-    atomizer_output:put_chars(standard_error, ["\e[31mError: ", Error, "\e[00m\n"]).
+    atomizer_output:put_chars(standard_error, [red(["Error: ", Error]), "\n"]).
 
 -spec error(string(), [term()]) -> ok.
 error(Format, Args) ->
@@ -105,7 +112,7 @@ error(Format, Args) ->
 warning(Warning) ->
     case cli_get_verbosity() of
         0 -> ok;
-        _ -> atomizer_output:put_chars(standard_error, ["\e[33mWarning: ", Warning, "\e[00m\n"])
+        _ -> atomizer_output:put_chars(standard_error, [yellow(["Warning: ", Warning]), "\n"])
     end.
 
 -spec warning(string(), [term()]) -> ok.
@@ -114,6 +121,36 @@ warning(Format, Args) ->
 
 
 %%% Miscellaneous
+
+-define(RED,    "\e[31m").
+-define(YELLOW, "\e[33m").
+-define(CYAN,   "\e[36m").
+-define(BOLD,   "\e[1m").
+-define(ITALIC, "\e[3m").
+-define(CLEAR,  "\e[00m").
+
+-spec pretty_atom(atom()) -> string().
+pretty_atom(Atom) ->
+    lists:flatten(io_lib:format("~p", [Atom])).
+
+-spec red(io_lib:chars()) -> io_lib:chars().
+red(Message) -> [?RED, Message, ?CLEAR].
+
+-spec yellow(io_lib:chars()) -> io_lib:chars().
+yellow(Message) -> [?YELLOW, Message, ?CLEAR].
+
+-spec cyan(io_lib:chars()) -> io_lib:chars().
+cyan(Message) -> [?CYAN, Message, ?CLEAR].
+
+-spec bold(io_lib:chars()) -> io_lib:chars().
+bold(Message) -> [?BOLD, Message, ?CLEAR].
+
+-spec italic(io_lib:chars()) -> io_lib:chars().
+italic(Message) -> [?ITALIC, Message, ?CLEAR].
+
+-spec words([io_lib:chars()]) -> io_lib:chars().
+words(Words) ->
+    lists:join(" ", Words).
 
 -spec plural(non_neg_integer(), string(), string()) -> string().
 plural(1, Singular, _) -> Singular;

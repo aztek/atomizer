@@ -180,10 +180,11 @@ list_atoms(Atoms) ->
 -spec list_atom(atom(), atomizer:locations()) -> ok.
 list_atom(Atom, Locations) ->
     NrOccurrences = atomizer:nr_occurrences(Locations),
-    case atomizer:cli_get_verbosity() of
-        2 -> atomizer:print("~p\t~p\t~p", [Atom, NrOccurrences, atomizer:nr_files(Locations)]);
-        _ -> atomizer:print("~p\t~p",     [Atom, NrOccurrences])
-    end.
+    Columns = case atomizer:cli_get_verbosity() of
+                  2 -> [atomizer:pretty_atom(Atom), integer_to_list(NrOccurrences), integer_to_list(atomizer:nr_files(Locations))];
+                  _ -> [atomizer:pretty_atom(Atom), integer_to_list(NrOccurrences)]
+              end,
+    atomizer:print(lists:join("\t", Columns)).
 
 -spec show_atoms(atomizer:atoms()) -> ok.
 show_atoms(Atoms) ->
@@ -196,14 +197,17 @@ show_abridged_list(Printer, List) ->
     case length(List) of
         ListLength when Verbosity =< 1, ListLength > PreviewLength + 1 ->
             lists:foreach(Printer, lists:sublist(List, PreviewLength)),
-            atomizer:print("\e[3m... (~p more)\e[00m", [ListLength - PreviewLength]);
+            atomizer:print(["... ", atomizer:italic(["(", integer_to_list(ListLength - PreviewLength), " more)"])]);
         _ ->
             lists:foreach(Printer, List)
     end.
 
 -spec show_atom(atom(), atomizer:locations()) -> ok.
-show_atom(Atom, Locations) ->
-    atomizer:print("~n\e[1m~p\e[00m", [Atom]),
+show_atom(Atom, Locations) -> show_atom("", Atom, Locations).
+
+-spec show_atom(io_lib:chars(), atom(), atomizer:locations()) -> ok.
+show_atom(Prompt, Atom, Locations) ->
+    atomizer:print(["\n", Prompt, atomizer:bold(atomizer:pretty_atom(Atom))]),
     Info = [{filename:absname(File), lists:sort(sets:to_list(Positions)), sets:size(Positions)} ||
             {File, Positions} <- maps:to_list(Locations)],
     Files = lists:reverse(lists:keysort(3, Info)),
@@ -214,8 +218,8 @@ show_atom(Atom, Locations) ->
 show_location(File, Positions, NrPositions) ->
     case atomizer:cli_get_verbosity() of
         0 ->
-            atomizer:print("~s \e[3m(~w ~s)\e[00m",
-                           [File, NrPositions, atomizer:plural(NrPositions, "occurrence", "occurrences")]);
+            Occurrences = [integer_to_list(NrPositions), " ", atomizer:plural(NrPositions, "occurrence", "occurrences")],
+            atomizer:print([File, " ", atomizer:italic(["(", Occurrences, ")"])]);
         _ ->
             ShowPosition = fun (Position) -> atomizer:print([File, ":" | show_position(Position)]) end,
             show_abridged_list(ShowPosition, Positions)
@@ -223,27 +227,32 @@ show_location(File, Positions, NrPositions) ->
 
 -spec show_position(atomizer:position()) -> io_lib:chars().
 show_position(Line) when is_integer(Line) ->
-    io_lib:format("~p", [Line]);
+    integer_to_list(Line);
 
 show_position({Line, Column}) ->
-    io_lib:format("~p:~p", [Line, Column]).
+    [integer_to_list(Line), ":", integer_to_list(Column)].
 
 -spec warn_atoms(atomizer:atoms(), atomizer:warnings(), non_neg_integer(), non_neg_integer()) -> ok.
 warn_atoms(Atoms, Warnings, NrFiles, NrDirs) ->
-    NrAtoms = maps:size(Atoms),
+    lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning) end, lists:sort(sets:to_list(Warnings))),
+    NrAtoms    = maps:size(Atoms),
     NrWarnings = sets:size(Warnings),
-    lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning) end,
-                  lists:sort(sets:to_list(Warnings))),
-    atomizer:print("Found \e[1m~p\e[00m ~s of similar atoms among "
-                   "\e[1m~p\e[00m ~s in \e[1m~p\e[00m ~s and \e[1m~p\e[00m ~s.",
-                   [NrWarnings, atomizer:plural(NrWarnings, "pair",      "pairs"),
-                    NrAtoms,    atomizer:plural(NrAtoms,    "atom",      "atoms"),
-                    NrFiles,    atomizer:plural(NrFiles,    "file",      "files"),
-                    NrDirs,     atomizer:plural(NrDirs,     "directory", "directories")]).
+    ThisManyLooseAtoms = pretty_quantity(NrWarnings, "loose atom", "loose atoms"),
+    ThisManyAtoms      = pretty_quantity(NrAtoms,    "atom",       "atoms"),
+    ThisManyFiles      = pretty_quantity(NrFiles,    "file",       "files"),
+    ThisManyDirs       = pretty_quantity(NrDirs,     "directory",  "directories"),
+    Message = ["Found", ThisManyLooseAtoms, "among", ThisManyAtoms, "in", ThisManyFiles, "and", ThisManyDirs],
+    atomizer:print([atomizer:words(Message), "."]).
+
+-spec pretty_quantity(non_neg_integer(), string(), string()) -> io_lib:chars().
+pretty_quantity(Amount, Singular, Plural) ->
+    [atomizer:bold(integer_to_list(Amount)), " ", atomizer:plural(Amount, Singular, Plural)].
 
 -spec warn_atom(atomizer:atoms(), atomizer:warning()) -> ok.
 warn_atom(Atoms, {A, B}) ->
-    atomizer:print("\e[36m\e[1m~p\e[00m\e[36m vs \e[1m~p\e[00m", [A, B]),
-    show_atom(A, maps:get(A, Atoms)),
-    show_atom(B, maps:get(B, Atoms)),
+    PrettyA = atomizer:bold(atomizer:pretty_atom(A)),
+    PrettyB = atomizer:bold(atomizer:pretty_atom(B)),
+    atomizer:print(atomizer:words([atomizer:cyan(PrettyA), atomizer:cyan("vs"), atomizer:cyan(PrettyB)])),
+    show_atom("", A, maps:get(A, Atoms)),
+    show_atom("Similar more frequent atom ", B, maps:get(B, Atoms)),
     atomizer:print("\n").

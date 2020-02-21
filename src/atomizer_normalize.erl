@@ -10,8 +10,7 @@
 -spec normalize(atom()) -> [atomizer:normal_form()].
 %% Normalize atom names spelled in camelCase, snake_case, SCREAMING_SNAKE_CASE, kebab-case and their combination.
 normalize(Atom) ->
-    String = hd(io_lib:format("~p", [Atom])),
-    case string:lowercase([C || C <- String, C /= $_, C /= $-]) of
+    case string:lowercase([C || C <- atomizer:pretty_atom(Atom), C /= $_, C /= $-]) of
         [] -> [];
         NormalForm -> [list_to_atom(NormalForm)]
     end.
