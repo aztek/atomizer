@@ -1,4 +1,4 @@
-.PHONY: all dialyze clean
+.PHONY: all dialyze atomize test clean
 
 all: atomizer
 
@@ -43,6 +43,11 @@ dialyze: $(BEAMS) $(DIALYZER_PLT)
 
 $(DIALYZER_PLT):
 	dialyzer --build_plt --apps $(PLT_APPS) || test $$? -eq 2
+
+atomize: atomizer
+	./bin/atomizer src
+
+test: atomize
 
 clean:
 	rm -rf bin ebin dialyzer.plt

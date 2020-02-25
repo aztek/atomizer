@@ -22,15 +22,22 @@
 -spec main([string()]) -> no_return().
 main(CmdArgs) ->
     atomizer_output:start(_Parent = self()),
+    cli(CmdArgs),
+    receive
+        {halt, ExitCode} -> erlang:halt(ExitCode)
+    end.
+
+-spec cli([string()]) -> ok.
+cli(CmdArgs) ->
     case parse_args(CmdArgs) of
         {options, Options} ->
             case run(Options) of
-                ok ->
-                    atomizer_output:halt(0);
+                {ok, ExitCode} ->
+                    atomizer_output:halt(ExitCode);
 
                 {error, {Module, Error}} ->
                     atomizer:error(Module:format_error(Error)),
-                    atomizer_output:halt(1)
+                    atomizer_output:halt(2)
             end;
 
         {message, Message} ->
@@ -39,11 +46,7 @@ main(CmdArgs) ->
 
         {error, Error} ->
             atomizer:error(Error),
-            atomizer_output:halt(1)
-    end,
-    receive
-        {halt, ExitCode} ->
-            erlang:halt(ExitCode)
+            atomizer_output:halt(2)
     end.
 
 -spec parse_args([string()]) -> {options, #options{}} | {message, string()} | {error, string()}.
@@ -53,22 +56,16 @@ parse_args(CmdArgs) -> parse_args(CmdArgs, #options{}).
 parse_args([], Options) -> {options, Options};
 parse_args([CmdArg | CmdArgs], Options) ->
     case string:prefix(CmdArg, "-") of
-        nomatch ->
-            parse_args(CmdArgs, Options#options{paths = [CmdArg | Options#options.paths]});
-
-        Option ->
-            parse_option(Option, CmdArgs, Options)
+        nomatch -> parse_args(CmdArgs, Options#options{paths = [CmdArg | Options#options.paths]});
+        Option  -> parse_option(Option, CmdArgs, Options)
     end.
 
 -spec parse_includes([string()], #options{}) -> {ok, #options{}} | {message, string()} | {error, string()}.
 parse_includes([], Options) -> {options, Options};
 parse_includes([CmdArg | CmdArgs], Options) ->
     case string:prefix(CmdArg, "-") of
-        nomatch ->
-            parse_includes(CmdArgs, Options#options{includes = [CmdArg | Options#options.includes]});
-
-        Option ->
-            parse_option(Option, CmdArgs, Options)
+        nomatch -> parse_includes(CmdArgs, Options#options{includes = [CmdArg | Options#options.includes]});
+        Option  -> parse_option(Option, CmdArgs, Options)
     end.
 
 -spec parse_option(string(), [string()], #options{}) -> {ok, #options{}} | {message, string()} | {error, string()}.
@@ -135,7 +132,7 @@ usage() ->
 help() ->
     "".
 
--spec run(#options{} | file:filename()) -> ok | {error, term()}.
+-spec run(#options{} | file:filename()) -> {ok, ExitCode :: non_neg_integer()} | {error, term()}.
 run(#options{action = Action, paths = Paths, includes = IncludePaths, parse_beam = ParseBeams,
              warn_errors = WarnErrors, verbosity = Verbosity}) ->
     atomizer:cli_init(),
@@ -165,22 +162,23 @@ run(#options{action = Action, paths = Paths, includes = IncludePaths, parse_beam
 run(Path) ->
     run(#options{paths = [Path]}).
 
--spec run(action(), [file:filename()]) -> ok.
+-spec run(action(), [file:filename()]) -> {ok, ExitCode :: non_neg_integer()} | {error, term()}.
 run(Action, Paths) ->
     run(#options{action = Action, paths = Paths}).
 
--spec run(action(), [file:filename()], verbosity()) -> ok.
+-spec run(action(), [file:filename()], verbosity()) -> {ok, ExitCode :: non_neg_integer()} | {error, term()}.
 run(Action, Paths, Verbosity) ->
     run(#options{action = Action, paths = Paths, verbosity = Verbosity}).
 
--spec list_atoms(atomizer:atoms()) -> ok.
+-spec list_atoms(atomizer:atoms()) -> {ok, ExitCode :: non_neg_integer()}.
 list_atoms(Atoms) ->
     Verbosity = atomizer:cli_get_verbosity(),
     case lists:sort(maps:keys(Atoms)) of
         [] when Verbosity > 1 -> atomizer:print("No atoms found.");
         [] -> ok;
         Keys -> lists:foreach(fun (Atom) -> list_atom(Atom, maps:get(Atom, Atoms)) end, Keys)
-    end.
+    end,
+    {ok, 0}.
 
 -spec list_atom(atom(), atomizer:locations()) -> ok.
 list_atom(Atom, Locations) ->
@@ -191,11 +189,13 @@ list_atom(Atom, Locations) ->
               end,
     atomizer:print(lists:join("\t", Columns)).
 
--spec show_atoms(atomizer:atoms()) -> ok.
+-spec show_atoms(atomizer:atoms()) -> {ok, ExitCode :: non_neg_integer()}.
 show_atoms(Atoms) ->
     lists:foreach(fun (Atom) -> show_atom(Atom, maps:get(Atom, Atoms)) end,
-                  lists:sort(maps:keys(Atoms))).
+                  lists:sort(maps:keys(Atoms))),
+    {ok, 0}.
 
+-spec show_abridged_list(fun ((A) -> any()), [A]) -> {ok, ExitCode :: non_neg_integer()} when A :: term().
 show_abridged_list(Printer, List) ->
     Verbosity = atomizer:cli_get_verbosity(),
     PreviewLength = 4,
@@ -205,12 +205,13 @@ show_abridged_list(Printer, List) ->
             atomizer:print(["... ", atomizer:italic(["(", integer_to_list(ListLength - PreviewLength), " more)"])]);
         _ ->
             lists:foreach(Printer, List)
-    end.
+    end,
+    {ok, 0}.
 
--spec show_atom(atom(), atomizer:locations()) -> ok.
-show_atom(Atom, Locations) -> show_atom("", Atom, Locations).
+-spec show_atom(atom(), atomizer:locations()) -> {ok, ExitCode :: non_neg_integer()}.
+show_atom(Atom, Locations) -> show_atom(_Prompt = "", Atom, Locations).
 
--spec show_atom(io_lib:chars(), atom(), atomizer:locations()) -> ok.
+-spec show_atom(io_lib:chars(), atom(), atomizer:locations()) -> {ok, ExitCode :: non_neg_integer()}.
 show_atom(Prompt, Atom, Locations) ->
     atomizer:print(["\n", Prompt, atomizer:bold(atomizer:pretty_atom(Atom))]),
     Info = [{filename:absname(File), lists:sort(sets:to_list(Positions)), sets:size(Positions)} ||
@@ -219,7 +220,7 @@ show_atom(Prompt, Atom, Locations) ->
     ShowLocation = fun ({File, Positions, NrPositions}) -> show_location(File, Positions, NrPositions) end,
     show_abridged_list(ShowLocation, Files).
 
--spec show_location(file:filename(), [atomizer:position()], non_neg_integer()) -> ok.
+-spec show_location(file:filename(), [atomizer:position()], non_neg_integer()) -> {ok, ExitCode :: non_neg_integer()}.
 show_location(File, Positions, NrPositions) ->
     case atomizer:cli_get_verbosity() of
         0 ->
@@ -228,7 +229,8 @@ show_location(File, Positions, NrPositions) ->
         _ ->
             ShowPosition = fun (Position) -> atomizer:print([File, ":" | show_position(Position)]) end,
             show_abridged_list(ShowPosition, Positions)
-    end.
+    end,
+    {ok, 0}.
 
 -spec show_position(atomizer:position()) -> io_lib:chars().
 show_position(Line) when is_integer(Line) ->
@@ -237,7 +239,7 @@ show_position(Line) when is_integer(Line) ->
 show_position({Line, Column}) ->
     [integer_to_list(Line), ":", integer_to_list(Column)].
 
--spec warn_atoms(atomizer:atoms(), atomizer:warnings(), non_neg_integer(), non_neg_integer()) -> ok.
+-spec warn_atoms(atomizer:atoms(), atomizer:warnings(), non_neg_integer(), non_neg_integer()) -> {ok, ExitCode :: non_neg_integer()}.
 warn_atoms(Atoms, Warnings, NrFiles, NrDirs) ->
     lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning) end, lists:sort(sets:to_list(Warnings))),
     NrAtoms    = maps:size(Atoms),
@@ -247,7 +249,11 @@ warn_atoms(Atoms, Warnings, NrFiles, NrDirs) ->
     ThisManyFiles      = pretty_quantity(NrFiles,    "file",       "files"),
     ThisManyDirs       = pretty_quantity(NrDirs,     "directory",  "directories"),
     Message = ["Found", ThisManyLooseAtoms, "among", ThisManyAtoms, "in", ThisManyFiles, "and", ThisManyDirs],
-    atomizer:print([atomizer:words(Message), "."]).
+    atomizer:print([atomizer:words(Message), "."]),
+    case NrWarnings of
+        0 -> {ok, 0};
+        _ -> {ok, 1}
+    end.
 
 -spec pretty_quantity(non_neg_integer(), string(), string()) -> io_lib:chars().
 pretty_quantity(Amount, Singular, Plural) ->
