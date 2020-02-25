@@ -7,18 +7,6 @@
     run/3
 ]).
 
--type action() :: list | show | warn.
--type verbosity() :: 0 | 1 | 2. % 0 is least verbose, 2 is most verbose
-
--record(options, {
-    action      = warn  :: action(),
-    paths       = []    :: [file:filename()],
-    includes    = []    :: [file:filename()],
-    parse_beams = false :: boolean(),
-    warn_errors = false :: boolean(),
-    verbosity   = 1     :: verbosity()
-}).
-
 -spec main([string()]) -> no_return().
 main(CmdArgs) ->
     atomizer_output:start(_Parent = self()),
@@ -48,6 +36,18 @@ cli(CmdArgs) ->
             atomizer:error(Error),
             atomizer_output:halt(2)
     end.
+
+-record(options, {
+    action      = warn  :: action(),
+    paths       = []    :: [file:filename()],
+    includes    = []    :: [file:filename()],
+    parse_beams = false :: boolean(),
+    warn_errors = false :: boolean(),
+    verbosity   = 1     :: verbosity()
+}).
+
+-type action() :: list | show | warn.
+-type verbosity() :: 0 | 1 | 2. % 0 is least verbose, 2 is most verbose
 
 -spec parse_args([string()]) -> {options, #options{}} | {message, string()} | {error, string()}.
 parse_args(CmdArgs) -> parse_args(CmdArgs, #options{}).
@@ -132,7 +132,9 @@ usage() ->
 help() ->
     "".
 
--spec run(#options{} | file:filename()) -> {ok, ExitCode :: non_neg_integer()} | {error, term()}.
+-type exit_code() :: non_neg_integer().
+
+-spec run(#options{} | file:filename()) -> {ok, exit_code()} | {error, term()}.
 run(#options{action = Action} = Options) ->
     cli_init(Options),
     Package = package(Options),
@@ -160,11 +162,11 @@ run(#options{action = Action} = Options) ->
 run(Path) ->
     run(#options{paths = [Path]}).
 
--spec run(action(), [file:filename()]) -> {ok, ExitCode :: non_neg_integer()} | {error, term()}.
+-spec run(action(), [file:filename()]) -> {ok, exit_code()} | {error, term()}.
 run(Action, Paths) ->
     run(#options{action = Action, paths = Paths}).
 
--spec run(action(), [file:filename()], verbosity()) -> {ok, ExitCode :: non_neg_integer()} | {error, term()}.
+-spec run(action(), [file:filename()], verbosity()) -> {ok, exit_code()} | {error, term()}.
 run(Action, Paths, Verbosity) ->
     run(#options{action = Action, paths = Paths, verbosity = Verbosity}).
 
@@ -178,7 +180,7 @@ cli_init(#options{warn_errors = WarnErrors, verbosity = Verbosity}) ->
 package(#options{paths = Paths, includes = Includes, parse_beams = ParseBeams}) ->
     atomizer:package(Paths, Includes, ParseBeams).
 
--spec list_atoms(atomizer:atoms()) -> {ok, ExitCode :: non_neg_integer()}.
+-spec list_atoms(atomizer:atoms()) -> {ok, exit_code()}.
 list_atoms(Atoms) ->
     Verbosity = atomizer:cli_get_verbosity(),
     case lists:sort(maps:keys(Atoms)) of
@@ -197,13 +199,13 @@ list_atom(Atom, Locations) ->
               end,
     atomizer:print(lists:join("\t", Columns)).
 
--spec show_atoms(atomizer:atoms()) -> {ok, ExitCode :: non_neg_integer()}.
+-spec show_atoms(atomizer:atoms()) -> {ok, exit_code()}.
 show_atoms(Atoms) ->
     lists:foreach(fun (Atom) -> show_atom(Atom, maps:get(Atom, Atoms)) end,
                   lists:sort(maps:keys(Atoms))),
     {ok, 0}.
 
--spec show_abridged_list(fun ((A) -> any()), [A]) -> {ok, ExitCode :: non_neg_integer()} when A :: term().
+-spec show_abridged_list(fun ((A) -> any()), [A]) -> {ok, exit_code()} when A :: term().
 show_abridged_list(Printer, List) ->
     Verbosity = atomizer:cli_get_verbosity(),
     PreviewLength = 4,
@@ -216,10 +218,10 @@ show_abridged_list(Printer, List) ->
     end,
     {ok, 0}.
 
--spec show_atom(atom(), atomizer:locations()) -> {ok, ExitCode :: non_neg_integer()}.
+-spec show_atom(atom(), atomizer:locations()) -> {ok, exit_code()}.
 show_atom(Atom, Locations) -> show_atom(_Prompt = "", Atom, Locations).
 
--spec show_atom(io_lib:chars(), atom(), atomizer:locations()) -> {ok, ExitCode :: non_neg_integer()}.
+-spec show_atom(io_lib:chars(), atom(), atomizer:locations()) -> {ok, exit_code()}.
 show_atom(Prompt, Atom, Locations) ->
     atomizer:print(["\n", Prompt, atomizer:bold(atomizer:pretty_atom(Atom))]),
     Info = [{filename:absname(File), lists:sort(sets:to_list(Positions)), sets:size(Positions)} ||
@@ -228,7 +230,7 @@ show_atom(Prompt, Atom, Locations) ->
     ShowLocation = fun ({File, Positions, NrPositions}) -> show_location(File, Positions, NrPositions) end,
     show_abridged_list(ShowLocation, Files).
 
--spec show_location(file:filename(), [atomizer:position()], non_neg_integer()) -> {ok, ExitCode :: non_neg_integer()}.
+-spec show_location(file:filename(), [atomizer:position()], non_neg_integer()) -> {ok, exit_code()}.
 show_location(File, Positions, NrPositions) ->
     case atomizer:cli_get_verbosity() of
         0 ->
@@ -247,7 +249,7 @@ show_position(Line) when is_integer(Line) ->
 show_position({Line, Column}) ->
     [integer_to_list(Line), ":", integer_to_list(Column)].
 
--spec warn_atoms(atomizer:atoms(), atomizer:warnings(), non_neg_integer(), non_neg_integer()) -> {ok, ExitCode :: non_neg_integer()}.
+-spec warn_atoms(atomizer:atoms(), atomizer:warnings(), non_neg_integer(), non_neg_integer()) -> {ok, exit_code()}.
 warn_atoms(Atoms, Warnings, NrFiles, NrDirs) ->
     lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning) end, lists:sort(sets:to_list(Warnings))),
     NrAtoms    = maps:size(Atoms),
