@@ -23,7 +23,7 @@ collect_atoms_loop(Atoms) ->
             {ok, Atoms};
 
         {error, Error} ->
-            case atomizer:cli_get_warn_errors() of
+            case atomizer_cli_options:get_warn_errors() of
                 true ->
                     atomizer:warning(format_error(Error)),
                     collect_atoms_loop(Atoms);
@@ -61,7 +61,7 @@ collect_warnings_loop(Pid, Atoms, Warnings, NrParsed) ->
             {ok, Atoms, SignificantWarnings, NrFiles, NrDirs};
 
         {error, Error} ->
-            case atomizer:cli_get_warn_errors() of
+            case atomizer_cli_options:get_warn_errors() of
                 true ->
                     atomizer:warning(format_error(Error)),
                     collect_warnings_loop(Pid, Atoms, Warnings, NrParsed);

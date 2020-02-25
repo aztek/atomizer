@@ -20,7 +20,7 @@ traverse(Pid, Source, IncludePaths) ->
     case read_source(Pid, Source, IncludePaths) of
         ok -> Pid ! {done_source, Source};
         {error, {Module, Error}} ->
-            case atomizer:cli_get_warn_errors() of
+            case atomizer_cli_options:get_warn_errors() of
                 true ->
                     atomizer:warning(Module:format_error(Error)),
                     Pid ! {done_source, Source};
@@ -51,7 +51,7 @@ traverse_path(Pid, Path) ->
         {ok, other}  -> ignore;
         {ok, Source} -> Pid ! {add_source, Source};
         {error, {Module, Error}} ->
-            case atomizer:cli_get_warn_errors() of
+            case atomizer_cli_options:get_warn_errors() of
                 true ->
                     atomizer:warning(Module:format_error(Error)),
                     ignore;

@@ -17,7 +17,7 @@ main(CmdArgs) ->
 
 -spec cli([string()]) -> exit_code().
 cli(CmdArgs) ->
-    case parse_args(CmdArgs) of
+    case atomizer_cli_options:parse(CmdArgs) of
         {options, Options} ->
             case run(Options) of
                 {ok, ExitCode} ->
@@ -37,107 +37,12 @@ cli(CmdArgs) ->
             _Error = 2
     end.
 
--record(options, {
-    action      = warn  :: action(),
-    paths       = []    :: [file:filename()],
-    includes    = []    :: [file:filename()],
-    parse_beams = false :: boolean(),
-    warn_errors = false :: boolean(),
-    verbosity   = 1     :: verbosity()
-}).
-
--type action() :: list | show | warn.
--type verbosity() :: 0 | 1 | 2. % 0 is least verbose, 2 is most verbose
-
--spec parse_args([string()]) -> {options, #options{}} | {message, string()} | {error, string()}.
-parse_args(CmdArgs) -> parse_args(CmdArgs, #options{}).
-
--spec parse_args([string()], #options{}) -> {options, #options{}} | {message, string()} | {error, string()}.
-parse_args([], Options) -> {options, Options};
-parse_args([CmdArg | CmdArgs], Options) ->
-    case string:prefix(CmdArg, "-") of
-        nomatch -> parse_args(CmdArgs, Options#options{paths = [CmdArg | Options#options.paths]});
-        Option  -> parse_option(Option, CmdArgs, Options)
-    end.
-
--spec parse_includes([string()], #options{}) -> {ok, #options{}} | {message, string()} | {error, string()}.
-parse_includes([], Options) -> {options, Options};
-parse_includes([CmdArg | CmdArgs], Options) ->
-    case string:prefix(CmdArg, "-") of
-        nomatch -> parse_includes(CmdArgs, Options#options{includes = [CmdArg | Options#options.includes]});
-        Option  -> parse_option(Option, CmdArgs, Options)
-    end.
-
--spec parse_option(string(), [string()], #options{}) -> {ok, #options{}} | {message, string()} | {error, string()}.
-parse_option(Option, CmdArgs, Options) ->
-    case Option of
-        _Help when Option == "h"; Option == "-help" ->
-            {message, usage() ++ "\n" ++ help()};
-
-        _Action when Option == "a"; Option == "-action" ->
-            case parse_action(CmdArgs) of
-                {ok, Action, TailCmdArgs} ->
-                    parse_args(TailCmdArgs, Options#options{action = Action});
-
-                {error, Error} ->
-                    {error, Error}
-            end;
-
-        _Includes when Option == "i"; Option == "I"; Option == "-include" ->
-            parse_includes(CmdArgs, Options);
-
-        _ParseBeams when Option == "b"; Option == "-parse-beams" ->
-            parse_args(CmdArgs, Options#options{parse_beams = true});
-
-        _Warnings when Option == "w"; Options == "-warn-errors" ->
-            parse_args(CmdArgs, Options#options{warn_errors = true});
-
-        _Verbosity when Option == "v"; Option == "-verbosity" ->
-            case parse_verbosity(CmdArgs) of
-                {ok, Verbosity, TailCmdArgs} ->
-                    parse_args(TailCmdArgs, Options#options{verbosity = Verbosity});
-
-                {error, Error} ->
-                    {error, Error}
-            end;
-
-        _ ->
-            {error, "Unrecognized option."}
-    end.
-
--spec parse_action([string()]) -> {ok, action(), [string()]} | {error, string()}.
-parse_action([]) -> {error, "Malformed arguments - action is missing."};
-parse_action([CmdArg | CmdArgs]) ->
-    case CmdArg of
-        "list" -> {ok, list, CmdArgs};
-        "show" -> {ok, show, CmdArgs};
-        "warn" -> {ok, warn, CmdArgs};
-        _ -> {error, "Wrong action. Supported values are list, show and warn."}
-    end.
-
--spec parse_verbosity([string()]) -> {ok, verbosity(), [string()]} | {error, string()}.
-parse_verbosity([]) -> {error, "Malformed arguments - verbosity is missing."};
-parse_verbosity([CmdArg | CmdArgs]) ->
-    case CmdArg of
-        "0" -> {ok, 0, CmdArgs};
-        "1" -> {ok, 1, CmdArgs};
-        "2" -> {ok, 2, CmdArgs};
-        _ -> {error, "Wrong verbosity. Supported values are 0, 1 and 2."}
-    end.
-
-usage() ->
-    "Usage: atomizer [-a | --action ACTION] [-b | --parse-beams] [-i | -I | --include PATH*]\n" ++
-    "                [-w | --warn-errors] [-v | --verbosity VERBOSITY] PATH*\n".
-
-help() ->
-    "".
-
--spec run(#options{}) -> {ok, exit_code()} | {error, term()}.
-run(#options{action = Action} = Options) ->
-    cli_init(Options),
-    Package = package(Options),
+-spec run(atomizer_cli_options:options()) -> {ok, exit_code()} | {error, term()}.
+run(Options) ->
+    Package = atomizer_cli_options:package(Options),
+    atomizer_cli_options:init(Options),
     atomizer_progress:start(),
-    case Action of
+    case atomizer_cli_options:get_action() of
         list ->
             case atomizer_sup:collect_atoms(Package) of
                 {ok, Atoms} -> list_atoms(Atoms);
@@ -157,19 +62,9 @@ run(#options{action = Action} = Options) ->
             end
     end.
 
--spec cli_init(#options{}) -> ok.
-cli_init(#options{warn_errors = WarnErrors, verbosity = Verbosity}) ->
-    atomizer:cli_init(),
-    atomizer:cli_set_warn_errors(WarnErrors),
-    atomizer:cli_set_verbosity(Verbosity).
-
--spec package(#options{}) -> atomizer:package().
-package(#options{paths = Paths, includes = Includes, parse_beams = ParseBeams}) ->
-    atomizer:package(Paths, Includes, ParseBeams).
-
 -spec list_atoms(atomizer:atoms()) -> {ok, exit_code()}.
 list_atoms(Atoms) ->
-    Verbosity = atomizer:cli_get_verbosity(),
+    Verbosity = atomizer_cli_options:get_verbosity(),
     case lists:sort(maps:keys(Atoms)) of
         [] when Verbosity > 1 -> atomizer:print("No atoms found.");
         [] -> ok;
@@ -180,7 +75,7 @@ list_atoms(Atoms) ->
 -spec list_atom(atom(), atomizer:locations()) -> ok.
 list_atom(Atom, Locations) ->
     NrOccurrences = atomizer:nr_occurrences(Locations),
-    Columns = case atomizer:cli_get_verbosity() of
+    Columns = case atomizer_cli_options:get_verbosity() of
                   2 -> [atomizer:pretty_atom(Atom), integer_to_list(NrOccurrences), integer_to_list(atomizer:nr_files(Locations))];
                   _ -> [atomizer:pretty_atom(Atom), integer_to_list(NrOccurrences)]
               end,
@@ -194,7 +89,7 @@ show_atoms(Atoms) ->
 
 -spec show_abridged_list(fun ((A) -> any()), [A]) -> {ok, exit_code()} when A :: term().
 show_abridged_list(Printer, List) ->
-    Verbosity = atomizer:cli_get_verbosity(),
+    Verbosity = atomizer_cli_options:get_verbosity(),
     PreviewLength = 4,
     case length(List) of
         ListLength when Verbosity =< 1, ListLength > PreviewLength + 1 ->
@@ -219,7 +114,7 @@ show_atom(Prompt, Atom, Locations) ->
 
 -spec show_location(file:filename(), [atomizer:position()], non_neg_integer()) -> {ok, exit_code()}.
 show_location(File, Positions, NrPositions) ->
-    case atomizer:cli_get_verbosity() of
+    case atomizer_cli_options:get_verbosity() of
         0 ->
             Occurrences = [integer_to_list(NrPositions), " ", atomizer:plural(NrPositions, "occurrence", "occurrences")],
             atomizer:print([File, " ", atomizer:italic(["(", Occurrences, ")"])]);

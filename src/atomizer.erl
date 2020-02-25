@@ -1,14 +1,6 @@
 -module(atomizer).
 
 -export([
-    cli_init/0,
-    cli_set/2,
-    cli_get/2,
-    cli_set_warn_errors/1,
-    cli_get_warn_errors/0,
-    cli_set_verbosity/1,
-    cli_get_verbosity/0,
-
     package/3,
     package_paths/1,
     package_includes/1,
@@ -55,31 +47,6 @@
 -type warnings()  :: sets:set(warning()).
 
 -type normal_form() :: atom().
-
-
-%%% Global dictionary of command line arguments populated at startup
-
--define(CLI_TABLE, cli).
--define(CLI_WARN_ERRORS, warn_errors).
--define(CLI_VERBOSITY, verbosity).
-
-cli_init() ->
-    ets:new(?CLI_TABLE, [set, protected, named_table]).
-
-cli_set(Param, Value) ->
-    ets:insert(?CLI_TABLE, {Param, Value}).
-
-cli_get(Param, Default) ->
-    case ets:lookup(?CLI_TABLE, Param) of
-        [{Param, Value}] -> Value;
-        _ -> Default
-    end.
-
-cli_set_warn_errors(Value) -> cli_set(?CLI_WARN_ERRORS, Value).
-cli_get_warn_errors() -> cli_get(?CLI_WARN_ERRORS, false).
-
-cli_set_verbosity(Value) -> cli_set(?CLI_VERBOSITY, Value).
-cli_get_verbosity() -> cli_get(?CLI_VERBOSITY, 2).
 
 
 %%% Packages
@@ -139,7 +106,7 @@ error(Format, Args) ->
 
 -spec warning(io_lib:chars()) -> ok.
 warning(Warning) ->
-    case cli_get_verbosity() of
+    case atomizer_cli_options:get_verbosity() of
         0 -> ok;
         _ -> atomizer_output:put_chars(standard_error, [yellow(["Warning: ", Warning]), "\n"])
     end.

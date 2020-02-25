@@ -39,7 +39,7 @@ collect_sources(Package) ->
                               end,
                               {ok, [Source | Sources]};
                           {error, Error} ->
-                              case atomizer:cli_get_warn_errors() of
+                              case atomizer_cli_options:get_warn_errors() of
                                   true ->
                                       atomizer:warning(format_error(Error)),
                                       {ok, Sources};

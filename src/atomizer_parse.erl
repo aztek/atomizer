@@ -39,7 +39,7 @@ parse_epp(Epp) ->
             parse_epp(Epp);
 
         {error, {Line, Module, Error}} ->
-            case atomizer:cli_get_warn_errors() of
+            case atomizer_cli_options:get_warn_errors() of
                 true ->
                     atomizer:warning(format_error({{get(filename), Line}, {Module, Error}})),
                     parse_epp(Epp);
