@@ -9,7 +9,7 @@
 
 -type progress() :: 0..100.
 
--define(PROCESS_NAME, progress_bar).
+-define(PROCESS_NAME, ?MODULE).
 
 -define(PROGRESS_BAR_SCALE, 70).
 -define(PROGRESS_BAR_WIDTH, ?PROGRESS_BAR_SCALE + 7).

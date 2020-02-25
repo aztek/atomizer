@@ -21,25 +21,29 @@
 
 -spec main([string()]) -> no_return().
 main(CmdArgs) ->
-    atomizer_output:start(),
+    atomizer_output:start(_Parent = self()),
     case parse_args(CmdArgs) of
         {options, Options} ->
             case run(Options) of
                 ok ->
-                    halt(0);
+                    atomizer_output:halt(0);
 
                 {error, {Module, Error}} ->
                     atomizer:error(Module:format_error(Error)),
-                    halt(1)
+                    atomizer_output:halt(1)
             end;
 
         {message, Message} ->
             atomizer:print(Message),
-            halt(0);
+            atomizer_output:halt(0);
 
         {error, Error} ->
             atomizer:error(Error),
-            halt(1)
+            atomizer_output:halt(1)
+    end,
+    receive
+        {halt, ExitCode} ->
+            erlang:halt(ExitCode)
     end.
 
 -spec parse_args([string()]) -> {options, #options{}} | {message, string()} | {error, string()}.
@@ -137,6 +141,7 @@ run(#options{action = Action, paths = Paths, includes = IncludePaths, parse_beam
     atomizer:cli_init(),
     atomizer:cli_set_warn_errors(WarnErrors),
     atomizer:cli_set_verbosity(Verbosity),
+    atomizer_progress:start(),
     case Action of
         list ->
             case atomizer_sup:collect_atoms(Paths, IncludePaths, ParseBeams) of

@@ -10,11 +10,8 @@
 
 -spec collect_atoms([file:filename()], [file:filename()], boolean()) -> atoms_result().
 collect_atoms(Paths, IncludePaths, ParseBeams) ->
-    atomizer_progress:start(),
     spawn_link(atomizer_collect, collect, [self(), Paths, IncludePaths, ParseBeams]),
-    Result = collect_atoms_loop(maps:new()),
-    atomizer_progress:finish(),
-    Result.
+    collect_atoms_loop(maps:new()).
 
 -spec collect_atoms_loop(atomizer:atoms()) -> atoms_result().
 collect_atoms_loop(Atoms) ->
@@ -40,12 +37,9 @@ collect_atoms_loop(Atoms) ->
 
 -spec collect_warnings([file:filename()], [file:filename()], boolean()) -> warnings_result().
 collect_warnings(Paths, IncludePaths, ParseBeams) ->
-    atomizer_progress:start(),
     Pid = spawn_link(atomizer_compare, compare, [self()]),
     spawn_link(atomizer_collect, collect, [self(), Paths, IncludePaths, ParseBeams]),
-    Result = collect_warnings_loop(Pid, maps:new(), sets:new(), {-1, -1}),
-    atomizer_progress:finish(),
-    Result.
+    collect_warnings_loop(Pid, maps:new(), sets:new(), {-1, -1}).
 
 -spec collect_warnings_loop(pid(), atomizer:atoms(), atomizer:warnings(), {integer(), integer()}) -> warnings_result().
 collect_warnings_loop(Pid, Atoms, Warnings, NrParsed) ->

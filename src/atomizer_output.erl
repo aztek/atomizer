@@ -1,21 +1,22 @@
 -module(atomizer_output).
 
 -export([
-    start/0,
+    start/1,
     put_chars/2,
     set_progress/1,
-    hide_progress/0
+    hide_progress/0,
+    halt/1
 ]).
 
 -define(PROCESS_NAME, ?MODULE).
 
 -define(PROGRESS_BAR_DEVICE, standard_error).
 
--spec start() -> true.
-start() ->
-    register(?PROCESS_NAME, spawn(fun () -> loop() end)).
+-spec start(pid()) -> true.
+start(Parent) ->
+    register(?PROCESS_NAME, spawn(fun () -> Parent ! loop() end)).
 
--spec loop() -> no_return().
+-spec loop() -> {halt, ExitCode :: integer()}.
 loop() ->
     receive
         {output, IoDevice, Message} ->
@@ -27,10 +28,13 @@ loop() ->
             loop_progress(ProgressBar);
 
         hide_progress ->
-            loop()
+            loop();
+
+        {halt, ExitCode} ->
+            {halt, ExitCode}
     end.
 
--spec loop_progress(string()) -> no_return().
+-spec loop_progress(string()) -> {halt, ExitCode :: integer()}.
 loop_progress(LastShownProgressBar) ->
     receive
         {output, IoDevice, Message} ->
@@ -48,7 +52,11 @@ loop_progress(LastShownProgressBar) ->
 
         hide_progress ->
             erase_progress_bar(LastShownProgressBar),
-            loop()
+            loop();
+
+        {halt, ExitCode} ->
+            erase_progress_bar(LastShownProgressBar),
+            {halt, ExitCode}
     end.
 
 -spec put_chars(io:device(), io_lib:chars()) -> ok.
@@ -69,6 +77,11 @@ hide_progress() ->
 -spec draw_progress_bar(string()) -> ok.
 draw_progress_bar(ProgressBar) ->
     io:put_chars(?PROGRESS_BAR_DEVICE, ProgressBar).
+
+-spec halt(non_neg_integer()) -> ok.
+halt(ExitCode) ->
+    ?PROCESS_NAME ! {halt, ExitCode},
+    ok.
 
 -define(HIDE_CURSOR, "\e[?25l").
 -define(SHOW_CURSOR, "\e[?25h").
