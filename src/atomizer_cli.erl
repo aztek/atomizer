@@ -1,40 +1,40 @@
 -module(atomizer_cli).
 
 -export([
-    main/1,
-    run/1,
-    run/2,
-    run/3
+    main/1
 ]).
 
 -spec main([string()]) -> no_return().
 main(CmdArgs) ->
     atomizer_output:start(_Parent = self()),
-    cli(CmdArgs),
+    ExitCode = cli(CmdArgs),
+    atomizer_output:halt(ExitCode),
     receive
         {halt, ExitCode} -> erlang:halt(ExitCode)
     end.
 
--spec cli([string()]) -> ok.
+-type exit_code() :: non_neg_integer().
+
+-spec cli([string()]) -> exit_code().
 cli(CmdArgs) ->
     case parse_args(CmdArgs) of
         {options, Options} ->
             case run(Options) of
                 {ok, ExitCode} ->
-                    atomizer_output:halt(ExitCode);
+                    ExitCode;
 
                 {error, {Module, Error}} ->
                     atomizer:error(Module:format_error(Error)),
-                    atomizer_output:halt(2)
+                    _Error = 2
             end;
 
         {message, Message} ->
             atomizer:print(Message),
-            atomizer_output:halt(0);
+            _OK = 0;
 
         {error, Error} ->
             atomizer:error(Error),
-            atomizer_output:halt(2)
+            _Error = 2
     end.
 
 -record(options, {
@@ -132,9 +132,7 @@ usage() ->
 help() ->
     "".
 
--type exit_code() :: non_neg_integer().
-
--spec run(#options{} | file:filename()) -> {ok, exit_code()} | {error, term()}.
+-spec run(#options{}) -> {ok, exit_code()} | {error, term()}.
 run(#options{action = Action} = Options) ->
     cli_init(Options),
     Package = package(Options),
@@ -157,18 +155,7 @@ run(#options{action = Action} = Options) ->
                 {ok, Atoms, Warnings, NrFiles, NrDirs} -> warn_atoms(Atoms, Warnings, NrFiles, NrDirs);
                 {error, Error} -> {error, Error}
             end
-    end;
-
-run(Path) ->
-    run(#options{paths = [Path]}).
-
--spec run(action(), [file:filename()]) -> {ok, exit_code()} | {error, term()}.
-run(Action, Paths) ->
-    run(#options{action = Action, paths = Paths}).
-
--spec run(action(), [file:filename()], verbosity()) -> {ok, exit_code()} | {error, term()}.
-run(Action, Paths, Verbosity) ->
-    run(#options{action = Action, paths = Paths, verbosity = Verbosity}).
+    end.
 
 -spec cli_init(#options{}) -> ok.
 cli_init(#options{warn_errors = WarnErrors, verbosity = Verbosity}) ->
