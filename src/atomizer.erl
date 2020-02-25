@@ -9,6 +9,11 @@
     cli_set_verbosity/1,
     cli_get_verbosity/0,
 
+    package/3,
+    package_paths/1,
+    package_includes/1,
+    package_parse_beams/1,
+
     nr_files/1,
     nr_occurrences/1,
 
@@ -37,7 +42,8 @@
     position/0,
     warning/0,
     warnings/0,
-    normal_form/0
+    normal_form/0,
+    package/0
 ]).
 
 -type source() :: {erl,  file:filename()}
@@ -74,6 +80,29 @@ cli_get_warn_errors() -> cli_get(?CLI_WARN_ERRORS, false).
 
 cli_set_verbosity(Value) -> cli_set(?CLI_VERBOSITY, Value).
 cli_get_verbosity() -> cli_get(?CLI_VERBOSITY, 2).
+
+
+%%% Packages
+
+-record(package, {
+    paths       = []    :: [file:filename()],
+    includes    = []    :: [file:filename()],
+    parse_beams = false :: boolean()
+}).
+-opaque package() :: #package{}.
+
+-spec package([file:filename()], [file:filename()], boolean()) -> package().
+package(Paths, Includes, ParseBeams) ->
+    #package{paths = Paths, includes = Includes, parse_beams = ParseBeams}.
+
+-spec package_paths(package()) -> [file:filename()].
+package_paths(#package{paths = Paths}) -> Paths.
+
+-spec package_includes(package()) -> [file:filename()].
+package_includes(#package{includes = Includes}) -> Includes.
+
+-spec package_parse_beams(package()) -> boolean().
+package_parse_beams(#package{parse_beams = ParseBeams}) -> ParseBeams.
 
 
 %%% Locations

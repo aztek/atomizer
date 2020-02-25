@@ -1,16 +1,16 @@
 -module(atomizer_sup).
 
 -export([
-    collect_atoms/3,
-    collect_warnings/3,
+    collect_atoms/1,
+    collect_warnings/1,
     format_error/1
 ]).
 
 -type atoms_result() :: {ok, atomizer:atoms()} | {error, {?MODULE, term()}}.
 
--spec collect_atoms([file:filename()], [file:filename()], boolean()) -> atoms_result().
-collect_atoms(Paths, IncludePaths, ParseBeams) ->
-    spawn_link(atomizer_collect, collect, [self(), Paths, IncludePaths, ParseBeams]),
+-spec collect_atoms(atomizer:package()) -> atoms_result().
+collect_atoms(Package) ->
+    spawn_link(atomizer_collect, collect, [self(), Package]),
     collect_atoms_loop(maps:new()).
 
 -spec collect_atoms_loop(atomizer:atoms()) -> atoms_result().
@@ -35,10 +35,10 @@ collect_atoms_loop(Atoms) ->
 -type warnings_result() :: {ok, atomizer:atoms(), atomizer:warnings(), NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()}
                          | {error, {?MODULE, term()}}.
 
--spec collect_warnings([file:filename()], [file:filename()], boolean()) -> warnings_result().
-collect_warnings(Paths, IncludePaths, ParseBeams) ->
+-spec collect_warnings(atomizer:package()) -> warnings_result().
+collect_warnings(Package) ->
     Pid = spawn_link(atomizer_compare, compare, [self()]),
-    spawn_link(atomizer_collect, collect, [self(), Paths, IncludePaths, ParseBeams]),
+    spawn_link(atomizer_collect, collect, [self(), Package]),
     collect_warnings_loop(Pid, maps:new(), sets:new(), {-1, -1}).
 
 -spec collect_warnings_loop(pid(), atomizer:atoms(), atomizer:warnings(), {integer(), integer()}) -> warnings_result().

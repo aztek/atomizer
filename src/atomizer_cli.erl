@@ -14,7 +14,7 @@
     action      = warn  :: action(),
     paths       = []    :: [file:filename()],
     includes    = []    :: [file:filename()],
-    parse_beam  = false :: boolean(),
+    parse_beams = false :: boolean(),
     warn_errors = false :: boolean(),
     verbosity   = 1     :: verbosity()
 }).
@@ -86,8 +86,8 @@ parse_option(Option, CmdArgs, Options) ->
         _Includes when Option == "i"; Option == "I"; Option == "-include" ->
             parse_includes(CmdArgs, Options);
 
-        _ParseBeam when Option == "b"; Option == "-parse-beam" ->
-            parse_args(CmdArgs, Options#options{parse_beam = true});
+        _ParseBeams when Option == "b"; Option == "-parse-beams" ->
+            parse_args(CmdArgs, Options#options{parse_beams = true});
 
         _Warnings when Option == "w"; Options == "-warn-errors" ->
             parse_args(CmdArgs, Options#options{warn_errors = true});
@@ -126,34 +126,32 @@ parse_verbosity([CmdArg | CmdArgs]) ->
     end.
 
 usage() ->
-    "Usage: atomizer [-a | --action ACTION] [-b | --parse-beam] [-i | -I | --include PATH*]\n" ++
+    "Usage: atomizer [-a | --action ACTION] [-b | --parse-beams] [-i | -I | --include PATH*]\n" ++
     "                [-w | --warn-errors] [-v | --verbosity VERBOSITY] PATH*\n".
 
 help() ->
     "".
 
 -spec run(#options{} | file:filename()) -> {ok, ExitCode :: non_neg_integer()} | {error, term()}.
-run(#options{action = Action, paths = Paths, includes = IncludePaths, parse_beam = ParseBeams,
-             warn_errors = WarnErrors, verbosity = Verbosity}) ->
-    atomizer:cli_init(),
-    atomizer:cli_set_warn_errors(WarnErrors),
-    atomizer:cli_set_verbosity(Verbosity),
+run(#options{action = Action} = Options) ->
+    cli_init(Options),
+    Package = package(Options),
     atomizer_progress:start(),
     case Action of
         list ->
-            case atomizer_sup:collect_atoms(Paths, IncludePaths, ParseBeams) of
+            case atomizer_sup:collect_atoms(Package) of
                 {ok, Atoms} -> list_atoms(Atoms);
                 {error, Error} -> {error, Error}
             end;
 
         show ->
-            case atomizer_sup:collect_atoms(Paths, IncludePaths, ParseBeams) of
+            case atomizer_sup:collect_atoms(Package) of
                 {ok, Atoms} -> show_atoms(Atoms);
                 {error, Error} -> {error, Error}
             end;
 
         warn ->
-            case atomizer_sup:collect_warnings(Paths, IncludePaths, ParseBeams) of
+            case atomizer_sup:collect_warnings(Package) of
                 {ok, Atoms, Warnings, NrFiles, NrDirs} -> warn_atoms(Atoms, Warnings, NrFiles, NrDirs);
                 {error, Error} -> {error, Error}
             end
@@ -169,6 +167,16 @@ run(Action, Paths) ->
 -spec run(action(), [file:filename()], verbosity()) -> {ok, ExitCode :: non_neg_integer()} | {error, term()}.
 run(Action, Paths, Verbosity) ->
     run(#options{action = Action, paths = Paths, verbosity = Verbosity}).
+
+-spec cli_init(#options{}) -> ok.
+cli_init(#options{warn_errors = WarnErrors, verbosity = Verbosity}) ->
+    atomizer:cli_init(),
+    atomizer:cli_set_warn_errors(WarnErrors),
+    atomizer:cli_set_verbosity(Verbosity).
+
+-spec package(#options{}) -> atomizer:package().
+package(#options{paths = Paths, includes = Includes, parse_beams = ParseBeams}) ->
+    atomizer:package(Paths, Includes, ParseBeams).
 
 -spec list_atoms(atomizer:atoms()) -> {ok, ExitCode :: non_neg_integer()}.
 list_atoms(Atoms) ->
