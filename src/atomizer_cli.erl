@@ -55,24 +55,24 @@ run(Options) ->
             end;
 
         warn ->
-            case atomizer_sup:collect_warnings(Package) of
-                {ok, Atoms, Warnings, Statistics} -> warn_atoms(Atoms, Warnings, Statistics);
+            case atomizer_sup:find_loose_atoms(Package) of
+                {ok, LooseAtoms, Statistics} -> show_loose_atoms(LooseAtoms, Statistics);
                 {error, Error} -> {error, Error}
             end
     end.
 
--spec list_atoms(atomizer:atoms()) -> {ok, exit_code()}.
+-spec list_atoms([atomizer:atom_info()]) -> {ok, exit_code()}.
 list_atoms(Atoms) ->
     Verbosity = atomizer_cli_options:get_verbosity(),
-    case lists:sort(maps:keys(Atoms)) of
+    case Atoms of
         [] when Verbosity > 1 -> atomizer:print("No atoms found.");
         [] -> ok;
-        Keys -> lists:foreach(fun (Atom) -> list_atom(Atom, maps:get(Atom, Atoms)) end, Keys)
+        _  -> lists:foreach(fun list_atom/1, Atoms)
     end,
     {ok, 0}.
 
--spec list_atom(atom(), atomizer:locations()) -> ok.
-list_atom(Atom, Locations) ->
+-spec list_atom(atomizer:atom_info()) -> ok.
+list_atom({Atom, Locations}) ->
     NrOccurrences = atomizer:nr_occurrences(Locations),
     Columns = case atomizer_cli_options:get_verbosity() of
                   2 -> [atomizer:pretty_atom(Atom), integer_to_list(NrOccurrences), integer_to_list(atomizer:nr_files(Locations))];
@@ -80,10 +80,9 @@ list_atom(Atom, Locations) ->
               end,
     atomizer:print(lists:join("\t", Columns)).
 
--spec show_atoms(atomizer:atoms()) -> {ok, exit_code()}.
+-spec show_atoms([atomizer:atom_info()]) -> {ok, exit_code()}.
 show_atoms(Atoms) ->
-    lists:foreach(fun (Atom) -> show_atom(Atom, maps:get(Atom, Atoms)) end,
-                  lists:sort(maps:keys(Atoms))),
+    lists:foreach(fun show_atom/1, Atoms),
     {ok, 0}.
 
 -spec show_abridged_list(fun ((A) -> any()), [A]) -> {ok, exit_code()} when A :: term().
@@ -99,12 +98,9 @@ show_abridged_list(Printer, List) ->
     end,
     {ok, 0}.
 
--spec show_atom(atom(), atomizer:locations()) -> {ok, exit_code()}.
-show_atom(Atom, Locations) -> show_atom(_Prompt = "", Atom, Locations).
-
--spec show_atom(io_lib:chars(), atom(), atomizer:locations()) -> {ok, exit_code()}.
-show_atom(Prompt, Atom, Locations) ->
-    atomizer:print(["\n", Prompt, atomizer_output:bold(atomizer:pretty_atom(Atom))]),
+-spec show_atom(atomizer:atom_info()) -> {ok, exit_code()}.
+show_atom({Atom, Locations}) ->
+    atomizer:print(["\n" | atomizer_output:bold(atomizer:pretty_atom(Atom))]),
     Info = [{filename:absname(File), lists:sort(sets:to_list(Positions)), sets:size(Positions)} ||
             {File, Positions} <- maps:to_list(Locations)],
     Files = lists:reverse(lists:keysort(3, Info)),
@@ -130,14 +126,11 @@ show_position(Line) when is_integer(Line) ->
 show_position({Line, Column}) ->
     [integer_to_list(Line), ":", integer_to_list(Column)].
 
--spec warn_atoms(atomizer:atoms(), atomizer:warnings(), atomizer:statistics()) -> {ok, exit_code()}.
-warn_atoms(Atoms, Warnings, Stats) ->
-    lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning) end, lists:sort(sets:to_list(Warnings))),
+-spec show_loose_atoms([atomizer:loose_atom()], atomizer:statistics()) -> {ok, exit_code()}.
+show_loose_atoms(LooseAtoms, Stats) ->
+    lists:foreach(fun show_loose_atom/1, LooseAtoms),
     show_statistics(Stats),
-    ExitCode = case sets:size(Warnings) of
-                   0 -> 0;
-                   _ -> 1
-               end,
+    ExitCode = case LooseAtoms of [] -> 0; _ -> 1 end,
     {ok, ExitCode}.
 
 -spec show_statistics(atomizer:statistics()) -> ok.
@@ -153,11 +146,11 @@ show_statistics(Stats) ->
 pretty_quantity(Amount, Singular, Plural) ->
     [atomizer_output:bold(integer_to_list(Amount)), " ", atomizer:plural(Amount, Singular, Plural)].
 
--spec warn_atom(atomizer:atoms(), atomizer:warning()) -> ok.
-warn_atom(Atoms, {A, B}) ->
-    PrettyA = atomizer_output:bold(atomizer:pretty_atom(A)),
-    PrettyB = atomizer_output:bold(atomizer:pretty_atom(B)),
-    atomizer:print(atomizer_output:cyan(atomizer:words([PrettyA, "vs", PrettyB]))),
-    show_atom("", A, maps:get(A, Atoms)),
-    show_atom("", B, maps:get(B, Atoms)),
+-spec show_loose_atom(atomizer:loose_atom()) -> ok.
+show_loose_atom({{Loose, _} = LooseInfo, {Lookalike, _} = LookalikeInfo}) ->
+    PrettyLoose     = atomizer_output:bold(atomizer:pretty_atom(Loose)),
+    PrettyLookalike = atomizer_output:bold(atomizer:pretty_atom(Lookalike)),
+    atomizer:print(atomizer_output:cyan(atomizer:words([PrettyLoose, "vs", PrettyLookalike]))),
+    show_atom(LooseInfo),
+    show_atom(LookalikeInfo),
     atomizer:print("\n").

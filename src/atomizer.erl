@@ -33,22 +33,24 @@
     location/0,
     locations/0,
     position/0,
-    warning/0,
-    warnings/0,
+    lookalikes/0,
+    atom_info/0,
+    loose_atom/0,
     normal_form/0,
     package/0,
     statistics/0
 ]).
 
--type source() :: {erl,  file:filename()}
-                | {beam, file:filename()}
-                | {dir,  file:filename()}.
+-type source()      :: {erl,  file:filename()}
+                     | {beam, file:filename()}
+                     | {dir,  file:filename()}.
 
--type atoms()     :: #{atom() => locations()}.
--type warning()   :: {atom(), atom()}.
--type warnings()  :: sets:set(warning()).
-
+-type atoms()       :: #{atom() => locations()}.
+-type lookalikes()  :: sets:set({atom(), atom()}).
 -type normal_form() :: atom().
+
+-type atom_info()   :: {atom(), locations()}.
+-type loose_atom()  :: {LooseAtom :: atom_info(), Lookalike :: atom_info()}.
 
 
 %%% Packages

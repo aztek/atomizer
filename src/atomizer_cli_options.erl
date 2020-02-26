@@ -34,10 +34,10 @@
 
 %%% Parsing of command line options
 
--spec parse([string()]) -> {options, #options{}} | {message, string()} | {error, string()}.
+-spec parse([string()]) -> {options, options()} | {message, string()} | {error, string()}.
 parse(CmdArgs) -> parse(CmdArgs, #options{}).
 
--spec parse([string()], #options{}) -> {options, #options{}} | {message, string()} | {error, string()}.
+-spec parse([string()], options()) -> {options, options()} | {message, string()} | {error, string()}.
 parse([], Options) -> {options, Options};
 parse([CmdArg | CmdArgs], Options) ->
     case string:prefix(CmdArg, "-") of
@@ -45,7 +45,7 @@ parse([CmdArg | CmdArgs], Options) ->
         Option  -> parse_option(Option, CmdArgs, Options)
     end.
 
--spec parse_includes([string()], #options{}) -> {ok, #options{}} | {message, string()} | {error, string()}.
+-spec parse_includes([string()], options()) -> {ok, options()} | {message, string()} | {error, string()}.
 parse_includes([], Options) -> {options, Options};
 parse_includes([CmdArg | CmdArgs], Options) ->
     case string:prefix(CmdArg, "-") of
@@ -53,7 +53,7 @@ parse_includes([CmdArg | CmdArgs], Options) ->
         Option  -> parse_option(Option, CmdArgs, Options)
     end.
 
--spec parse_option(string(), [string()], #options{}) -> {ok, #options{}} | {message, string()} | {error, string()}.
+-spec parse_option(string(), [string()], options()) -> {ok, options()} | {message, string()} | {error, string()}.
 parse_option(Option, CmdArgs, Options) ->
     case Option of
         _Help when Option == "h"; Option == "-help" ->

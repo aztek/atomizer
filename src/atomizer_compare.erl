@@ -21,8 +21,8 @@ loop(Pid, Atoms, NFs) ->
                     ets:insert(Atoms, {Atom}),
                     lists:foreach(fun (NormalForm) ->
                                       case ets:lookup(NFs, NormalForm) of
-                                          [{_, Btom}] ->
-                                              Pid ! {warning, Atom, Btom, nf_mismatch};
+                                          [{_, Lookalike}] ->
+                                              Pid ! {lookalikes, Atom, Lookalike};
                                           [] ->
                                               ets:insert(NFs, {NormalForm, Atom})
                                       end
@@ -32,7 +32,7 @@ loop(Pid, Atoms, NFs) ->
             loop(Pid, Atoms, NFs);
 
         done_atoms ->
-            Pid ! done_warnings,
+            Pid ! done_comparing,
             ok
     end.
 

@@ -2,11 +2,12 @@
 
 -export([
     collect_atoms/1,
-    collect_warnings/1,
+    find_loose_atoms/1,
     format_error/1
 ]).
 
--type atoms_result() :: {ok, atomizer:atoms()} | {error, {?MODULE, term()}}.
+-type atoms_result() :: {ok, [atomizer:atom_info()]}
+                      | {error, {?MODULE, term()}}.
 
 -spec collect_atoms(atomizer:package()) -> atoms_result().
 collect_atoms(Package) ->
@@ -23,7 +24,7 @@ collect_atoms_loop(Atoms) ->
             collect_atoms_loop(add_atom_location(Atom, File, Position, Atoms));
 
         {done_atoms, _NrFiles, _NrDirs} ->
-            {ok, Atoms};
+            {ok, [{Atom, maps:get(Atom, Atoms)} || Atom <- lists:sort(maps:keys(Atoms))]};
 
         {error, Error} ->
             case atomizer_cli_options:get_warn_errors() of
@@ -35,45 +36,48 @@ collect_atoms_loop(Atoms) ->
             end
     end.
 
--type warnings_result() :: {ok, atomizer:atoms(), atomizer:warnings(), atomizer:statistics()}
-                         | {error, {?MODULE, term()}}.
+-type loose_atoms_result() :: {ok, [atomizer:loose_atom()], atomizer:statistics()}
+                            | {error, {?MODULE, term()}}.
 
--spec collect_warnings(atomizer:package()) -> warnings_result().
-collect_warnings(Package) ->
+-spec find_loose_atoms(atomizer:package()) -> loose_atoms_result().
+find_loose_atoms(Package) ->
     Pid = spawn_link(atomizer_compare, compare, [self()]),
     spawn_link(atomizer_collect, collect, [self(), Package]),
     atomizer_progress:start(),
-    Result = collect_warnings_loop(Pid, maps:new(), sets:new(), {-1, -1}),
+    Result = find_loose_atoms_loop(Pid, maps:new(), sets:new(), {-1, -1}),
     atomizer_progress:finish(),
     Result.
 
--spec collect_warnings_loop(pid(), atomizer:atoms(), atomizer:warnings(), {integer(), integer()}) -> warnings_result().
-collect_warnings_loop(Pid, Atoms, Warnings, NrParsed) ->
+-spec find_loose_atoms_loop(pid(), atomizer:atoms(), atomizer:lookalikes(), {integer(), integer()}) -> loose_atoms_result().
+find_loose_atoms_loop(Pid, Atoms, Lookalikes, NrParsed) ->
     receive
         {atom, Atom, File, Position} ->
             Pid ! {atom, Atom},
-            collect_warnings_loop(Pid, add_atom_location(Atom, File, Position, Atoms), Warnings, NrParsed);
+            find_loose_atoms_loop(Pid, add_atom_location(Atom, File, Position, Atoms), Lookalikes, NrParsed);
 
         {done_atoms, NrFiles, NrDirs} ->
             Pid ! done_atoms,
-            collect_warnings_loop(Pid, Atoms, Warnings, {NrFiles, NrDirs});
+            find_loose_atoms_loop(Pid, Atoms, Lookalikes, {NrFiles, NrDirs});
 
-        {warning, Atom, Btom, _} ->
-            collect_warnings_loop(Pid, Atoms, sets:add_element({Atom, Btom}, Warnings), NrParsed);
+        {lookalikes, Atom, Lookalike} ->
+            find_loose_atoms_loop(Pid, Atoms, sets:add_element({Atom, Lookalike}, Lookalikes), NrParsed);
 
-        done_warnings ->
-            SignificantWarnings = sets:filter(fun (Warning) -> is_significant(Atoms, Warning) end, Warnings),
+        done_comparing ->
+            LooseAtoms = lists:filtermap(fun ({A, B}) ->
+                                             is_loose({A, maps:get(A, Atoms)}, {B, maps:get(B, Atoms)})
+                                         end,
+                                         sets:to_list(Lookalikes)),
             NrAtoms = maps:size(Atoms),
-            NrLooseAtoms = sets:size(SignificantWarnings),
+            NrLooseAtoms = length(LooseAtoms),
             {NrFiles, NrDirs} = NrParsed,
             Stats = atomizer:statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs),
-            {ok, Atoms, SignificantWarnings, Stats};
+            {ok, lists:sort(LooseAtoms), Stats};
 
         {error, Error} ->
             case atomizer_cli_options:get_warn_errors() of
                 true ->
                     atomizer:warning(format_error(Error)),
-                    collect_warnings_loop(Pid, Atoms, Warnings, NrParsed);
+                    find_loose_atoms_loop(Pid, Atoms, Lookalikes, NrParsed);
                 false ->
                     {error, Error}
             end
@@ -87,22 +91,28 @@ add_atom_location(Atom, File, Position, Atoms) ->
     UpdatedLocations = maps:put(File, UpdatedPositions, Locations),
     maps:put(Atom, UpdatedLocations, Atoms).
 
--spec is_significant(atomizer:atoms(), atomizer:warning()) -> boolean().
-is_significant(Atoms, {A, B}) ->
-    LocationsA = maps:get(A, Atoms),
-    LocationsB = maps:get(B, Atoms),
-    NrOccurrenceA = atomizer:nr_occurrences(LocationsA),
-    NrOccurrenceB = atomizer:nr_occurrences(LocationsB),
-    {Typo, Min, Max} =
-    if
-        NrOccurrenceA < NrOccurrenceB -> {A, NrOccurrenceA, NrOccurrenceB};
-        true -> {B, NrOccurrenceB, NrOccurrenceA}
-    end,
+-spec is_loose(atomizer:atom_info(), atomizer:atom_info()) -> {true, atomizer:loose_atom()} | false.
+is_loose({_, LocationsA} = A, {_, LocationsB} = B) ->
+    NrOccurrencesA = atomizer:nr_occurrences(LocationsA),
+    NrOccurrencesB = atomizer:nr_occurrences(LocationsB),
+
+    {Loose, Min, Max} =
+        case NrOccurrencesA < NrOccurrencesB of
+            true  -> {{B, A}, NrOccurrencesA, NrOccurrencesB};
+            false -> {{A, B}, NrOccurrencesB, NrOccurrencesA}
+        end,
+
+    {{_, Locations}, _} = Loose,
+
     Disproportion = 4,
     Disproportional = Max / Min > Disproportion,
-    Local = atomizer:nr_files(maps:get(Typo, Atoms)) == 1,
+    Local = atomizer:nr_files(Locations) == 1,
     Related = not sets:is_disjoint(sets:from_list(maps:keys(LocationsA)), sets:from_list(maps:keys(LocationsB))),
-    Disproportional andalso Local andalso Related.
+
+    case Disproportional andalso Local andalso Related of
+        true  -> {true, Loose};
+        false -> false
+    end.
 
 -spec format_error({module(), term()}) -> io_lib:chars().
 format_error({Module, Error}) ->
