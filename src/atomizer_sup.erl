@@ -6,7 +6,7 @@
     format_error/1
 ]).
 
--type atoms_result() :: {ok, [atomizer:atom_info()]}
+-type atoms_result() :: {ok, [atomizer:atom_info()], atomizer:statistics()}
                       | {error, {?MODULE, term()}}.
 
 -spec collect_atoms(atomizer:package()) -> atoms_result().
@@ -23,8 +23,10 @@ collect_atoms_loop(Atoms) ->
         {atom, Atom, File, Position} ->
             collect_atoms_loop(add_atom_location(Atom, File, Position, Atoms));
 
-        {done_atoms, _NrFiles, _NrDirs} ->
-            {ok, [{Atom, maps:get(Atom, Atoms)} || Atom <- lists:sort(maps:keys(Atoms))]};
+        {done_atoms, NrFiles, NrDirs} ->
+            SortedAtoms = [{Atom, maps:get(Atom, Atoms)} || Atom <- lists:sort(maps:keys(Atoms))],
+            Stats = atomizer:statistics(_NrLooseAtoms = -1, _NrAtoms = length(SortedAtoms), NrFiles, NrDirs),
+            {ok, SortedAtoms, Stats};
 
         {error, Error} ->
             case atomizer_cli_options:get_warn_errors() of

@@ -44,30 +44,30 @@ run(Options) ->
     case atomizer_cli_options:get_action() of
         list ->
             case atomizer_sup:collect_atoms(Package) of
-                {ok, Atoms} -> list_atoms(Atoms);
+                {ok, Atoms, Stats} -> list_atoms(Atoms, Stats);
                 {error, Error} -> {error, Error}
             end;
 
         show ->
             case atomizer_sup:collect_atoms(Package) of
-                {ok, Atoms} -> show_atoms(Atoms);
+                {ok, Atoms, Stats} -> show_atoms(Atoms, Stats);
                 {error, Error} -> {error, Error}
             end;
 
         warn ->
             case atomizer_sup:find_loose_atoms(Package) of
-                {ok, LooseAtoms, Statistics} -> show_loose_atoms(LooseAtoms, Statistics);
+                {ok, LooseAtoms, Stats} -> show_loose_atoms(LooseAtoms, Stats);
                 {error, Error} -> {error, Error}
             end
     end.
 
--spec list_atoms([atomizer:atom_info()]) -> {ok, exit_code()}.
-list_atoms(Atoms) ->
+-spec list_atoms([atomizer:atom_info()], atomizer:statistics()) -> {ok, exit_code()}.
+list_atoms(Atoms, Stats) ->
+    lists:foreach(fun list_atom/1, Atoms),
     Verbosity = atomizer_cli_options:get_verbosity(),
-    case Atoms of
-        [] when Verbosity > 1 -> atomizer:print("No atoms found.");
-        [] -> ok;
-        _  -> lists:foreach(fun list_atom/1, Atoms)
+    if
+        Verbosity > 1 -> show_statistics(Stats);
+        true -> ok
     end,
     {ok, 0}.
 
@@ -80,9 +80,14 @@ list_atom({Atom, Locations}) ->
               end,
     atomizer:print(lists:join("\t", Columns)).
 
--spec show_atoms([atomizer:atom_info()]) -> {ok, exit_code()}.
-show_atoms(Atoms) ->
+-spec show_atoms([atomizer:atom_info()], atomizer:statistics()) -> {ok, exit_code()}.
+show_atoms(Atoms, Stats) ->
     lists:foreach(fun show_atom/1, Atoms),
+    Verbosity = atomizer_cli_options:get_verbosity(),
+    if
+        Verbosity > 1 -> show_statistics(Stats);
+        true -> ok
+    end,
     {ok, 0}.
 
 -spec show_abridged_list(fun ((A) -> any()), [A]) -> {ok, exit_code()} when A :: term().
@@ -139,8 +144,9 @@ show_statistics(Stats) ->
     ThisManyAtoms      = pretty_quantity(atomizer:get_nr_atoms(Stats),       "atom",       "atoms"),
     ThisManyFiles      = pretty_quantity(atomizer:get_nr_files(Stats),       "file",       "files"),
     ThisManyDirs       = pretty_quantity(atomizer:get_nr_dirs(Stats),        "directory",  "directories"),
-    Message = ["Found", ThisManyLooseAtoms, "among", ThisManyAtoms, "in", ThisManyFiles, "and", ThisManyDirs],
-    atomizer:print([atomizer:words(Message), "."]).
+    Message = ["Found" | [[ThisManyLooseAtoms, "among"] || atomizer:get_nr_loose_atoms(Stats) >= 0]] ++
+              [ThisManyAtoms, "in", ThisManyFiles, "and", ThisManyDirs],
+    atomizer:print(["\n", atomizer:words(Message), "."]).
 
 -spec pretty_quantity(non_neg_integer(), string(), string()) -> io_lib:chars().
 pretty_quantity(Amount, Singular, Plural) ->
