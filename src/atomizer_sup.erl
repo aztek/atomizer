@@ -35,7 +35,7 @@ collect_atoms_loop(Atoms) ->
             end
     end.
 
--type warnings_result() :: {ok, atomizer:atoms(), atomizer:warnings(), NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()}
+-type warnings_result() :: {ok, atomizer:atoms(), atomizer:warnings(), atomizer:statistics()}
                          | {error, {?MODULE, term()}}.
 
 -spec collect_warnings(atomizer:package()) -> warnings_result().
@@ -62,9 +62,12 @@ collect_warnings_loop(Pid, Atoms, Warnings, NrParsed) ->
             collect_warnings_loop(Pid, Atoms, sets:add_element({Atom, Btom}, Warnings), NrParsed);
 
         done_warnings ->
-            {NrFiles, NrDirs} = NrParsed,
             SignificantWarnings = sets:filter(fun (Warning) -> is_significant(Atoms, Warning) end, Warnings),
-            {ok, Atoms, SignificantWarnings, NrFiles, NrDirs};
+            NrAtoms = maps:size(Atoms),
+            NrLooseAtoms = sets:size(SignificantWarnings),
+            {NrFiles, NrDirs} = NrParsed,
+            Stats = atomizer:statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs),
+            {ok, Atoms, SignificantWarnings, Stats};
 
         {error, Error} ->
             case atomizer_cli_options:get_warn_errors() of

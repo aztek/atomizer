@@ -56,7 +56,7 @@ run(Options) ->
 
         warn ->
             case atomizer_sup:collect_warnings(Package) of
-                {ok, Atoms, Warnings, NrFiles, NrDirs} -> warn_atoms(Atoms, Warnings, NrFiles, NrDirs);
+                {ok, Atoms, Warnings, Statistics} -> warn_atoms(Atoms, Warnings, Statistics);
                 {error, Error} -> {error, Error}
             end
     end.
@@ -130,21 +130,24 @@ show_position(Line) when is_integer(Line) ->
 show_position({Line, Column}) ->
     [integer_to_list(Line), ":", integer_to_list(Column)].
 
--spec warn_atoms(atomizer:atoms(), atomizer:warnings(), non_neg_integer(), non_neg_integer()) -> {ok, exit_code()}.
-warn_atoms(Atoms, Warnings, NrFiles, NrDirs) ->
+-spec warn_atoms(atomizer:atoms(), atomizer:warnings(), atomizer:statistics()) -> {ok, exit_code()}.
+warn_atoms(Atoms, Warnings, Stats) ->
     lists:foreach(fun (Warning) -> warn_atom(Atoms, Warning) end, lists:sort(sets:to_list(Warnings))),
-    NrAtoms    = maps:size(Atoms),
-    NrWarnings = sets:size(Warnings),
-    ThisManyLooseAtoms = pretty_quantity(NrWarnings, "loose atom", "loose atoms"),
-    ThisManyAtoms      = pretty_quantity(NrAtoms,    "atom",       "atoms"),
-    ThisManyFiles      = pretty_quantity(NrFiles,    "file",       "files"),
-    ThisManyDirs       = pretty_quantity(NrDirs,     "directory",  "directories"),
+    show_statistics(Stats),
+    ExitCode = case sets:size(Warnings) of
+                   0 -> 0;
+                   _ -> 1
+               end,
+    {ok, ExitCode}.
+
+-spec show_statistics(atomizer:statistics()) -> ok.
+show_statistics(Stats) ->
+    ThisManyLooseAtoms = pretty_quantity(atomizer:get_nr_loose_atoms(Stats), "loose atom", "loose atoms"),
+    ThisManyAtoms      = pretty_quantity(atomizer:get_nr_atoms(Stats),       "atom",       "atoms"),
+    ThisManyFiles      = pretty_quantity(atomizer:get_nr_files(Stats),       "file",       "files"),
+    ThisManyDirs       = pretty_quantity(atomizer:get_nr_dirs(Stats),        "directory",  "directories"),
     Message = ["Found", ThisManyLooseAtoms, "among", ThisManyAtoms, "in", ThisManyFiles, "and", ThisManyDirs],
-    atomizer:print([atomizer:words(Message), "."]),
-    case NrWarnings of
-        0 -> {ok, 0};
-        _ -> {ok, 1}
-    end.
+    atomizer:print([atomizer:words(Message), "."]).
 
 -spec pretty_quantity(non_neg_integer(), string(), string()) -> io_lib:chars().
 pretty_quantity(Amount, Singular, Plural) ->

@@ -9,6 +9,12 @@
     nr_files/1,
     nr_occurrences/1,
 
+    statistics/4,
+    get_nr_loose_atoms/1,
+    get_nr_atoms/1,
+    get_nr_files/1,
+    get_nr_dirs/1,
+
     print/1,
     print/2,
     error/1,
@@ -30,7 +36,8 @@
     warning/0,
     warnings/0,
     normal_form/0,
-    package/0
+    package/0,
+    statistics/0
 ]).
 
 -type source() :: {erl,  file:filename()}
@@ -65,6 +72,38 @@ package_includes(#package{includes = Includes}) -> Includes.
 
 -spec package_parse_beams(package()) -> boolean().
 package_parse_beams(#package{parse_beams = ParseBeams}) -> ParseBeams.
+
+
+%%% Statistics
+
+-record(statistics, {
+    nr_loose_atoms :: non_neg_integer(),
+    nr_atoms       :: non_neg_integer(),
+    nr_files       :: non_neg_integer(),
+    nr_dirs        :: non_neg_integer()
+}).
+-opaque statistics() :: #statistics{}.
+
+-spec statistics(non_neg_integer(), non_neg_integer(), non_neg_integer(), non_neg_integer()) -> statistics().
+statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs) ->
+    #statistics{
+        nr_loose_atoms = NrLooseAtoms,
+        nr_atoms       = NrAtoms,
+        nr_files       = NrFiles,
+        nr_dirs        = NrDirs
+    }.
+
+-spec get_nr_loose_atoms(statistics()) -> non_neg_integer().
+get_nr_loose_atoms(#statistics{nr_loose_atoms = NrLooseAtoms}) -> NrLooseAtoms.
+
+-spec get_nr_atoms(statistics()) -> non_neg_integer().
+get_nr_atoms(#statistics{nr_atoms = NrAtoms}) -> NrAtoms.
+
+-spec get_nr_files(statistics()) -> non_neg_integer().
+get_nr_files(#statistics{nr_files = NrFiles}) -> NrFiles.
+
+-spec get_nr_dirs(statistics()) -> non_neg_integer().
+get_nr_dirs(#statistics{nr_dirs = NrDirs}) -> NrDirs.
 
 
 %%% Locations
