@@ -112,8 +112,8 @@ is_erlang(FileName) ->
 is_beam(FileName) ->
     lists:any(fun (Ext) -> lists:suffix(Ext, FileName) end, ?BEAM_EXTENSIONS).
 
--spec format_error(error()) -> string().
+-spec format_error(error()) -> io_lib:chars().
 format_error({{SymlinkSrc, SymlinkDst}, {Module, Error}}) ->
-    io_lib:format("Failed to read symlink ~s -> ~s: ~s", [SymlinkSrc, SymlinkDst, Module:format_error(Error)]);
+    atomizer:words(["Failed to read symlink", SymlinkSrc, "->", [SymlinkDst, ":"], Module:format_error(Error)]);
 format_error({Path, {Module, Error}}) ->
-    io_lib:format("Failed to read ~s: ~s", [Path, Module:format_error(Error)]).
+    atomizer:words(["Failed to read", [Path, ":"], Module:format_error(Error)]).

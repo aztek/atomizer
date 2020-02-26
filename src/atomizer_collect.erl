@@ -106,6 +106,6 @@ collected_statistics(Collection) ->
                   end
               end, {0, 0}, Collection).
 
--spec format_error({module(), term()}) -> string().
+-spec format_error({module(), term()}) -> io_lib:chars().
 format_error({Module, Error}) ->
     Module:format_error(Error).

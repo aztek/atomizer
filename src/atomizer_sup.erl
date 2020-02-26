@@ -95,6 +95,6 @@ is_significant(Atoms, {A, B}) ->
     Related = not sets:is_disjoint(sets:from_list(maps:keys(LocationsA)), sets:from_list(maps:keys(LocationsB))),
     Disproportional andalso Local andalso Related.
 
--spec format_error({module(), term()}) -> string().
+-spec format_error({module(), term()}) -> io_lib:chars().
 format_error({Module, Error}) ->
     Module:format_error(Error).

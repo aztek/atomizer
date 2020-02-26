@@ -126,23 +126,32 @@ warning(Format, Args) ->
 -define(CLEAR,  "\e[00m").
 
 -spec pretty_atom(atom()) -> string().
-pretty_atom(Atom) ->
-    lists:flatten(io_lib:format("~p", [Atom])).
+pretty_atom(Atom) -> lists:flatten(io_lib:format("~p", [Atom])).
+
+-spec ascii_color(string(), io_lib:chars()) -> io_lib:chars().
+ascii_color(Color, Chars) -> [Color, ascii_recolor(Color, Chars), ?CLEAR].
+
+-spec ascii_color(string(), io_lib:chars()) -> io_lib:chars().
+ascii_recolor(Color, Chars) ->
+    lists:flatmap(fun (?CLEAR) -> [?CLEAR, Color];
+                      (Chunks) when is_list(Chunks) -> [ascii_recolor(Color, Chunks)];
+                      (Char) -> [Char] end,
+                  Chars).
 
 -spec red(io_lib:chars()) -> io_lib:chars().
-red(Message) -> [?RED, Message, ?CLEAR].
+red(Chars) -> ascii_color(?RED, Chars).
 
 -spec yellow(io_lib:chars()) -> io_lib:chars().
-yellow(Message) -> [?YELLOW, Message, ?CLEAR].
+yellow(Chars) -> ascii_color(?YELLOW, Chars).
 
 -spec cyan(io_lib:chars()) -> io_lib:chars().
-cyan(Message) -> [?CYAN, Message, ?CLEAR].
+cyan(Chars) -> ascii_color(?CYAN, Chars).
 
 -spec bold(io_lib:chars()) -> io_lib:chars().
-bold(Message) -> [?BOLD, Message, ?CLEAR].
+bold(Chars) -> ascii_color(?BOLD, Chars).
 
 -spec italic(io_lib:chars()) -> io_lib:chars().
-italic(Message) -> [?ITALIC, Message, ?CLEAR].
+italic(Chars) -> ascii_color(?ITALIC, Chars).
 
 -spec words([io_lib:chars()]) -> io_lib:chars().
 words(Words) ->

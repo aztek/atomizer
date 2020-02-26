@@ -63,18 +63,22 @@ parse_beam(Pid, Path) ->
         {error, beam_lib, Error} -> {error, {?MODULE, {Path, {beam_lib, Error}}}}
     end.
 
--spec format_error(error()) -> string().
+-spec format_error(error()) -> io_lib:chars().
 format_error({Location, Reason}) ->
     Filename = case Location of
-                   {Path, {Line, Column}} -> io_lib:format("~s line ~p, column ~p", [Path, Line, Column]);
-                   {Path, Line} -> io_lib:format("~s line ~p", [Path, Line]);
-                   Path -> Path
+                   {Path, {Line, Column}} ->
+                       atomizer:words([Path, "line",  [atomizer:bold(integer_to_list(Line)), ","],
+                                             "column", atomizer:bold(integer_to_list(Column))]);
+                   {Path, Line} ->
+                       atomizer:words([Path, "line", atomizer:bold(integer_to_list(Line))]);
+                   Path ->
+                       Path
                end,
     Message = case Reason of
                   no_abstract_code -> "file was compiled without the debug_info option";
                   {Module, Error}  -> Module:format_error(Error)
               end,
-    io_lib:format("Unable to parse ~s: ~s", [Filename, Message]).
+    atomizer:words(["Unable to parse", [Filename, ":"], Message]).
 
 -spec parse_form(erl_parse:abstract_form() | erl_parse:form_info()) -> ok.
 parse_form(Form) -> case Form of
