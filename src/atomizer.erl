@@ -17,11 +17,6 @@
     warning/2,
 
     pretty_atom/1,
-    red/1,
-    yellow/1,
-    cyan/1,
-    bold/1,
-    italic/1,
     words/1,
     plural/3
 ]).
@@ -98,7 +93,7 @@ print(Format, Args) ->
 
 -spec error(io_lib:chars()) -> ok.
 error(Error) ->
-    atomizer_output:put_chars(standard_error, [red(["Error: ", Error]), "\n"]).
+    atomizer_output:put_chars(standard_error, [atomizer_output:red(["Error: ", Error]), "\n"]).
 
 -spec error(string(), [term()]) -> ok.
 error(Format, Args) ->
@@ -108,7 +103,7 @@ error(Format, Args) ->
 warning(Warning) ->
     case atomizer_cli_options:get_verbosity() of
         0 -> ok;
-        _ -> atomizer_output:put_chars(standard_error, [yellow(["Warning: ", Warning]), "\n"])
+        _ -> atomizer_output:put_chars(standard_error, [atomizer_output:yellow(["Warning: ", Warning]), "\n"])
     end.
 
 -spec warning(string(), [term()]) -> ok.
@@ -118,40 +113,8 @@ warning(Format, Args) ->
 
 %%% Miscellaneous
 
--define(RED,    "\e[31m").
--define(YELLOW, "\e[33m").
--define(CYAN,   "\e[36m").
--define(BOLD,   "\e[1m").
--define(ITALIC, "\e[3m").
--define(CLEAR,  "\e[00m").
-
 -spec pretty_atom(atom()) -> string().
 pretty_atom(Atom) -> lists:flatten(io_lib:format("~p", [Atom])).
-
--spec ascii_color(string(), io_lib:chars()) -> io_lib:chars().
-ascii_color(Color, Chars) -> [Color, ascii_recolor(Color, Chars), ?CLEAR].
-
--spec ascii_color(string(), io_lib:chars()) -> io_lib:chars().
-ascii_recolor(Color, Chars) ->
-    lists:flatmap(fun (?CLEAR) -> [?CLEAR, Color];
-                      (Chunks) when is_list(Chunks) -> [ascii_recolor(Color, Chunks)];
-                      (Char) -> [Char] end,
-                  Chars).
-
--spec red(io_lib:chars()) -> io_lib:chars().
-red(Chars) -> ascii_color(?RED, Chars).
-
--spec yellow(io_lib:chars()) -> io_lib:chars().
-yellow(Chars) -> ascii_color(?YELLOW, Chars).
-
--spec cyan(io_lib:chars()) -> io_lib:chars().
-cyan(Chars) -> ascii_color(?CYAN, Chars).
-
--spec bold(io_lib:chars()) -> io_lib:chars().
-bold(Chars) -> ascii_color(?BOLD, Chars).
-
--spec italic(io_lib:chars()) -> io_lib:chars().
-italic(Chars) -> ascii_color(?ITALIC, Chars).
 
 -spec words([io_lib:chars()]) -> io_lib:chars().
 words(Words) ->

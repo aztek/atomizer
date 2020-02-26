@@ -94,7 +94,7 @@ show_abridged_list(Printer, List) ->
     case length(List) of
         ListLength when Verbosity =< 1, ListLength > PreviewLength + 1 ->
             lists:foreach(Printer, lists:sublist(List, PreviewLength)),
-            atomizer:print(["... ", atomizer:italic(["(", integer_to_list(ListLength - PreviewLength), " more)"])]);
+            atomizer:print(["... ", atomizer_output:italic(["(", integer_to_list(ListLength - PreviewLength), " more)"])]);
         _ ->
             lists:foreach(Printer, List)
     end,
@@ -105,7 +105,7 @@ show_atom(Atom, Locations) -> show_atom(_Prompt = "", Atom, Locations).
 
 -spec show_atom(io_lib:chars(), atom(), atomizer:locations()) -> {ok, exit_code()}.
 show_atom(Prompt, Atom, Locations) ->
-    atomizer:print(["\n", Prompt, atomizer:bold(atomizer:pretty_atom(Atom))]),
+    atomizer:print(["\n", Prompt, atomizer_output:bold(atomizer:pretty_atom(Atom))]),
     Info = [{filename:absname(File), lists:sort(sets:to_list(Positions)), sets:size(Positions)} ||
             {File, Positions} <- maps:to_list(Locations)],
     Files = lists:reverse(lists:keysort(3, Info)),
@@ -117,7 +117,7 @@ show_location(File, Positions, NrPositions) ->
     case atomizer_cli_options:get_verbosity() of
         0 ->
             Occurrences = [integer_to_list(NrPositions), " ", atomizer:plural(NrPositions, "occurrence", "occurrences")],
-            atomizer:print([File, " ", atomizer:italic(["(", Occurrences, ")"])]);
+            atomizer:print([File, " ", atomizer_output:italic(["(", Occurrences, ")"])]);
         _ ->
             ShowPosition = fun (Position) -> atomizer:print([File, ":" | show_position(Position)]) end,
             show_abridged_list(ShowPosition, Positions)
@@ -149,13 +149,13 @@ warn_atoms(Atoms, Warnings, NrFiles, NrDirs) ->
 
 -spec pretty_quantity(non_neg_integer(), string(), string()) -> io_lib:chars().
 pretty_quantity(Amount, Singular, Plural) ->
-    [atomizer:bold(integer_to_list(Amount)), " ", atomizer:plural(Amount, Singular, Plural)].
+    [atomizer_output:bold(integer_to_list(Amount)), " ", atomizer:plural(Amount, Singular, Plural)].
 
 -spec warn_atom(atomizer:atoms(), atomizer:warning()) -> ok.
 warn_atom(Atoms, {A, B}) ->
-    PrettyA = atomizer:bold(atomizer:pretty_atom(A)),
-    PrettyB = atomizer:bold(atomizer:pretty_atom(B)),
-    atomizer:print(atomizer:words([atomizer:cyan(PrettyA), atomizer:cyan("vs"), atomizer:cyan(PrettyB)])),
+    PrettyA = atomizer_output:bold(atomizer:pretty_atom(A)),
+    PrettyB = atomizer_output:bold(atomizer:pretty_atom(B)),
+    atomizer:print(atomizer_output:cyan(atomizer:words([PrettyA, "vs", PrettyB]))),
     show_atom("", A, maps:get(A, Atoms)),
     show_atom("Similar more frequent atom ", B, maps:get(B, Atoms)),
     atomizer:print("\n").

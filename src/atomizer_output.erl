@@ -5,7 +5,13 @@
     put_chars/2,
     set_progress/1,
     hide_progress/0,
-    halt/1
+    halt/1,
+
+    red/1,
+    yellow/1,
+    cyan/1,
+    bold/1,
+    italic/1
 ]).
 
 -define(PROCESS_NAME, ?MODULE).
@@ -98,3 +104,38 @@ erase_progress_bar(LastShownProgressBar) ->
     io:put_chars(?PROGRESS_BAR_DEVICE, ?HIDE_CURSOR),
     io:put_chars(?PROGRESS_BAR_DEVICE, lists:duplicate(length(LastShownProgressBar), "\b \b")),
     io:put_chars(?PROGRESS_BAR_DEVICE, ?SHOW_CURSOR).
+
+
+%%% Colored ASCII output
+
+-define(RED,    "\e[31m").
+-define(YELLOW, "\e[33m").
+-define(CYAN,   "\e[36m").
+-define(BOLD,   "\e[1m").
+-define(ITALIC, "\e[3m").
+-define(CLEAR,  "\e[00m").
+
+-spec ascii_color(string(), io_lib:chars()) -> io_lib:chars().
+ascii_color(Color, Chars) -> [Color, ascii_recolor(Color, Chars), ?CLEAR].
+
+-spec ascii_recolor(string(), io_lib:chars()) -> io_lib:chars().
+ascii_recolor(Color, Chars) ->
+    lists:flatmap(fun (?CLEAR) -> [?CLEAR, Color];
+                      (Chunks) when is_list(Chunks) -> [ascii_recolor(Color, Chunks)];
+                      (Char) -> [Char] end,
+                  Chars).
+
+-spec red(io_lib:chars()) -> io_lib:chars().
+red(Chars) -> ascii_color(?RED, Chars).
+
+-spec yellow(io_lib:chars()) -> io_lib:chars().
+yellow(Chars) -> ascii_color(?YELLOW, Chars).
+
+-spec cyan(io_lib:chars()) -> io_lib:chars().
+cyan(Chars) -> ascii_color(?CYAN, Chars).
+
+-spec bold(io_lib:chars()) -> io_lib:chars().
+bold(Chars) -> ascii_color(?BOLD, Chars).
+
+-spec italic(io_lib:chars()) -> io_lib:chars().
+italic(Chars) -> ascii_color(?ITALIC, Chars).
