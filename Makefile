@@ -33,7 +33,7 @@ EscriptBin = <<"#!/usr/bin/env escript\n" \
 ok = file:write_file("bin/atomizer", EscriptBin), halt().
 endef
 
-DIALYZER_PLT = dialyzer.plt
+DIALYZER_PLT = plt/dialyzer.plt
 export DIALYZER_PLT
 PLT_APPS = erts kernel stdlib 
 DIALYZER_OPTS ?= -Werror_handling -Wrace_conditions
@@ -42,12 +42,16 @@ dialyze: $(BEAMS) $(DIALYZER_PLT)
 	dialyzer $(DIALYZER_OPTS) ebin
 
 $(DIALYZER_PLT):
+	mkdir -p plt
 	dialyzer --build_plt --apps $(PLT_APPS) || test $$? -eq 2
 
 atomize: atomizer
 	./bin/atomizer src
 
-test: atomize
+test: dialyze atomize
 
 clean:
-	rm -rf bin ebin dialyzer.plt
+	rm -rf bin ebin
+
+cleanall: clean
+	rm -rf plt
