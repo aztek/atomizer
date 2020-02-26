@@ -35,7 +35,9 @@ parse_epp(Epp) ->
             parse_epp(Epp);
 
         {warning, {Line, Module, Warning}} ->
-            atomizer:warning("In ~s line ~p: ~s", [get(filename), Line, Module:format_error(Warning)]),
+            atomizer:warning(atomizer:words(["In", get(filename),
+                                             "line", [atomizer_output:bold(integer_to_list(Line)), ":"],
+                                             Module:format_error(Warning)])),
             parse_epp(Epp);
 
         {error, {Line, Module, Error}} ->

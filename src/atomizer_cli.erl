@@ -41,7 +41,6 @@ cli(CmdArgs) ->
 run(Options) ->
     Package = atomizer_cli_options:package(Options),
     atomizer_cli_options:init(Options),
-    atomizer_progress:start(),
     case atomizer_cli_options:get_action() of
         list ->
             case atomizer_sup:collect_atoms(Package) of
@@ -157,5 +156,5 @@ warn_atom(Atoms, {A, B}) ->
     PrettyB = atomizer_output:bold(atomizer:pretty_atom(B)),
     atomizer:print(atomizer_output:cyan(atomizer:words([PrettyA, "vs", PrettyB]))),
     show_atom("", A, maps:get(A, Atoms)),
-    show_atom("Similar more frequent atom ", B, maps:get(B, Atoms)),
+    show_atom("", B, maps:get(B, Atoms)),
     atomizer:print("\n").

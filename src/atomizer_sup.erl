@@ -11,7 +11,10 @@
 -spec collect_atoms(atomizer:package()) -> atoms_result().
 collect_atoms(Package) ->
     spawn_link(atomizer_collect, collect, [self(), Package]),
-    collect_atoms_loop(maps:new()).
+    atomizer_progress:start(),
+    Result = collect_atoms_loop(maps:new()),
+    atomizer_progress:finish(),
+    Result.
 
 -spec collect_atoms_loop(atomizer:atoms()) -> atoms_result().
 collect_atoms_loop(Atoms) ->
@@ -39,7 +42,10 @@ collect_atoms_loop(Atoms) ->
 collect_warnings(Package) ->
     Pid = spawn_link(atomizer_compare, compare, [self()]),
     spawn_link(atomizer_collect, collect, [self(), Package]),
-    collect_warnings_loop(Pid, maps:new(), sets:new(), {-1, -1}).
+    atomizer_progress:start(),
+    Result = collect_warnings_loop(Pid, maps:new(), sets:new(), {-1, -1}),
+    atomizer_progress:finish(),
+    Result.
 
 -spec collect_warnings_loop(pid(), atomizer:atoms(), atomizer:warnings(), {integer(), integer()}) -> warnings_result().
 collect_warnings_loop(Pid, Atoms, Warnings, NrParsed) ->
