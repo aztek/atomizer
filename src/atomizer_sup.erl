@@ -6,10 +6,9 @@
     format_error/1
 ]).
 
--type atoms_result() :: {ok, [atomizer:atom_info()], atomizer:statistics()}
-                      | {error, {?MODULE, term()}}.
+-type result(A) :: {ok, [A], atomizer:statistics()} | {error, {?MODULE, term()}}.
 
--spec collect_atoms(atomizer:package()) -> atoms_result().
+-spec collect_atoms(atomizer:package()) -> result(atomizer:atom_info()).
 collect_atoms(Package) ->
     spawn_link(atomizer_collect, collect, [self(), Package]),
     atomizer_progress:start(),
@@ -17,7 +16,7 @@ collect_atoms(Package) ->
     atomizer_progress:finish(),
     Result.
 
--spec collect_atoms_loop(atomizer:atoms()) -> atoms_result().
+-spec collect_atoms_loop(atomizer:atoms()) -> result(atomizer:atom_info()).
 collect_atoms_loop(Atoms) ->
     receive
         {atom, Atom, File, Position} ->
@@ -38,10 +37,7 @@ collect_atoms_loop(Atoms) ->
             end
     end.
 
--type loose_atoms_result() :: {ok, [atomizer:loose_atom()], atomizer:statistics()}
-                            | {error, {?MODULE, term()}}.
-
--spec find_loose_atoms(atomizer:package()) -> loose_atoms_result().
+-spec find_loose_atoms(atomizer:package()) -> result(atomizer:loose_atom()).
 find_loose_atoms(Package) ->
     Pid = spawn_link(atomizer_compare, compare, [self()]),
     spawn_link(atomizer_collect, collect, [self(), Package]),
@@ -50,7 +46,7 @@ find_loose_atoms(Package) ->
     atomizer_progress:finish(),
     Result.
 
--spec find_loose_atoms_loop(pid(), atomizer:atoms(), atomizer:lookalikes(), {integer(), integer()}) -> loose_atoms_result().
+-spec find_loose_atoms_loop(pid(), atomizer:atoms(), atomizer:lookalikes(), {integer(), integer()}) -> result(atomizer:loose_atom()).
 find_loose_atoms_loop(Pid, Atoms, Lookalikes, NrParsed) ->
     receive
         {atom, Atom, File, Position} ->

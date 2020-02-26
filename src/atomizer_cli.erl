@@ -73,11 +73,11 @@ list_atoms(Atoms, Stats) ->
 
 -spec list_atom(atomizer:atom_info()) -> ok.
 list_atom({Atom, Locations}) ->
+    Verbosity = atomizer_cli_options:get_verbosity(),
     NrOccurrences = atomizer:nr_occurrences(Locations),
-    Columns = case atomizer_cli_options:get_verbosity() of
-                  2 -> [atomizer:pretty_atom(Atom), integer_to_list(NrOccurrences), integer_to_list(atomizer:nr_files(Locations))];
-                  _ -> [atomizer:pretty_atom(Atom), integer_to_list(NrOccurrences)]
-              end,
+    NrFiles = atomizer:nr_files(Locations),
+    Columns = [atomizer:pretty_atom(Atom), integer_to_list(NrOccurrences)] ++
+              [integer_to_list(NrFiles) || Verbosity == 2],
     atomizer:print(lists:join("\t", Columns)).
 
 -spec show_atoms([atomizer:atom_info()], atomizer:statistics()) -> {ok, exit_code()}.

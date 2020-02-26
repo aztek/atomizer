@@ -79,14 +79,14 @@ package_parse_beams(#package{parse_beams = ParseBeams}) -> ParseBeams.
 %%% Statistics
 
 -record(statistics, {
-    nr_loose_atoms :: non_neg_integer(),
+    nr_loose_atoms :: non_neg_integer() | -1,
     nr_atoms       :: non_neg_integer(),
     nr_files       :: non_neg_integer(),
     nr_dirs        :: non_neg_integer()
 }).
 -opaque statistics() :: #statistics{}.
 
--spec statistics(non_neg_integer(), non_neg_integer(), non_neg_integer(), non_neg_integer()) -> statistics().
+-spec statistics(non_neg_integer() | -1, non_neg_integer(), non_neg_integer(), non_neg_integer()) -> statistics().
 statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs) ->
     #statistics{
         nr_loose_atoms = NrLooseAtoms,
