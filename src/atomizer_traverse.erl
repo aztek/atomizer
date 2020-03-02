@@ -94,7 +94,12 @@ resolve_real_path(Path, Fuel) ->
     {Source, Destination} = case Path of {_, _} -> Path; _ -> {Path, Path} end,
     case file:read_link_all(Destination) of
         {ok, SymlinkPath} ->
-            RealPath = filename:absname(SymlinkPath, filename:dirname(Destination)),
+            AbsoluteSymlinkPath =
+                case filename:pathtype(SymlinkPath) of
+                   absolute -> SymlinkPath;
+                   relative -> filename:absname(filename:join(filename:dirname(Destination), SymlinkPath))
+               end,
+            RealPath = normalize_path(AbsoluteSymlinkPath),
             resolve_real_path({Source, RealPath}, Fuel - 1);
 
         {error, enoent} ->
@@ -103,6 +108,20 @@ resolve_real_path(Path, Fuel) ->
         {error, _} ->
             {ok, Destination}
     end.
+
+-spec normalize_path(file:filename()) -> file:filename().
+normalize_path(Path) ->
+    normalize_path([], filename:split(Path)).
+
+-spec normalize_path([file:filename()], [file:filename()]) -> file:filename().
+normalize_path(NormalizedPath, []) ->
+    filename:join(lists:reverse(NormalizedPath));
+normalize_path(NormalizedPath, [H | T]) ->
+    normalize_path(case H of
+                       "."  -> NormalizedPath;
+                       ".." -> tl(NormalizedPath);
+                       _    -> [H | NormalizedPath]
+                   end, T).
 
 -spec is_erlang(file:filename()) -> boolean().
 is_erlang(FileName) ->
