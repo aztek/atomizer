@@ -94,23 +94,29 @@ is_loose({_, LocationsA} = A, {_, LocationsB} = B) ->
     NrOccurrencesA = atomizer:nr_occurrences(LocationsA),
     NrOccurrencesB = atomizer:nr_occurrences(LocationsB),
 
-    {Loose, Min, Max} =
+    {{Loose, Lookalike}, Min, Max} =
         case NrOccurrencesA < NrOccurrencesB of
             true  -> {{B, A}, NrOccurrencesA, NrOccurrencesB};
             false -> {{A, B}, NrOccurrencesB, NrOccurrencesA}
         end,
 
-    {{_, Locations}, _} = Loose,
-
     Disproportion = 4,
     Disproportional = Max / Min > Disproportion,
-    Local = atomizer:nr_files(Locations) == 1,
-    Related = not sets:is_disjoint(sets:from_list(maps:keys(LocationsA)), sets:from_list(maps:keys(LocationsB))),
 
-    case Disproportional andalso Local andalso Related of
-        true  -> {true, Loose};
+    case Disproportional andalso local(Loose) andalso related(A, B) of
+        true  -> {true, {Loose, Lookalike}};
         false -> false
     end.
+
+-spec local(atomizer:atom_info()) -> boolean().
+local({_, Locations}) ->
+    atomizer:nr_files(Locations) == 1.
+
+-spec related(atomizer:atom_info(), atomizer:atom_info()) -> boolean().
+related({_, LocationsA}, {_, LocationsB}) ->
+    FilesA = sets:from_list(maps:keys(LocationsA)),
+    FilesB = sets:from_list(maps:keys(LocationsB)),
+    not sets:is_disjoint(FilesA, FilesB).
 
 -spec format_error({module(), term()}) -> io_lib:chars().
 format_error({Module, Error}) ->
