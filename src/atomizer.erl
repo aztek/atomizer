@@ -97,7 +97,7 @@ statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs) ->
         nr_dirs        = NrDirs
     }.
 
--spec get_nr_loose_atoms(statistics()) -> non_neg_integer().
+-spec get_nr_loose_atoms(statistics()) -> non_neg_integer() | -1.
 get_nr_loose_atoms(#statistics{nr_loose_atoms = NrLooseAtoms}) -> NrLooseAtoms.
 
 -spec get_nr_atoms(statistics()) -> non_neg_integer().
