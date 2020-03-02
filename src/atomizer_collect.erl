@@ -19,7 +19,16 @@ collect(Pid, Package) ->
 -spec collect_paths(pid(), atomizer:package()) -> {ok, non_neg_integer(), non_neg_integer()} | {error, term()}.
 collect_paths(Pid, Package) ->
     case collect_sources(Package) of
-        {ok, Sources}  -> loop(Pid, sets:new(), sets:new(), queue:from_list(Sources), Package);
+        {ok, Sources} ->
+            Collection = ets:new(collection, [private, set]),
+            Pool = ets:new(pool, [private, set]),
+            Queue = ets:new(queue, [private, ordered_set]),
+            ets:insert(Queue, [{Source} || Source <- Sources]),
+            Result = loop(Pid, Collection, Pool, Queue, Package),
+            ets:delete(Queue),
+            ets:delete(Pool),
+            ets:delete(Collection),
+            Result;
         {error, Error} -> {error, Error}
     end.
 
@@ -50,23 +59,20 @@ collect_sources(Package) ->
               end,
     lists:foldl(Collect, {ok, []}, Paths).
 
--spec loop(pid(), Collection, Pool, Queue, Package) -> {ok, NrFiles, NrDirs} | {error, term()} when
-    NrFiles      :: non_neg_integer(),
-    NrDirs       :: non_neg_integer(),
-    Collection   :: sets:set(atomizer:source()),
-    Pool         :: sets:set(atomizer:source()),
-    Queue        :: queue:queue(atomizer:source()),
-    Package      :: atomizer:package().
+-spec loop(pid(), ets:tid(), ets:tid(), ets:tid(), atomizer:package()) ->
+    {ok, NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()} | {error, term()}.
 loop(Pid, Collection, Pool, Queue, Package) ->
-    case {sets:size(Pool), queue:len(Queue)} of
+    case {ets:info(Pool, size), ets:info(Queue, size)} of
         {0, 0} ->
             {NrFiles, NrDirs} = collected_statistics(Collection),
             {ok, NrFiles, NrDirs};
 
         {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_FILE_LIMIT, QueueSize > 0 ->
-            {{value, Source}, TailQueue} = queue:out(Queue),
+            Source = ets:first(Queue),
+            ets:delete(Queue, Source),
             spawn_link(atomizer_traverse, traverse, [self(), Source, atomizer:package_includes(Package)]),
-            loop(Pid, Collection, sets:add_element(Source, Pool), TailQueue, Package);
+            ets:insert(Pool, {Source}),
+            loop(Pid, Collection, Pool, Queue, Package);
 
         _ ->
             receive
@@ -75,11 +81,15 @@ loop(Pid, Collection, Pool, Queue, Package) ->
                         {dir, _} -> ok;
                         _ -> atomizer_progress:increase_total(1)
                     end,
-                    SkipSource = sets:is_element(Source, Pool) orelse
-                                 sets:is_element(Source, Collection) orelse
+                    SkipSource = ets:member(Pool, Source) orelse
+                                 ets:member(Collection, Source) orelse
+                                 ets:member(Queue, Source) orelse
                                  (not atomizer:package_parse_beams(Package) andalso (Type == beam)),
-                    UpdatedQueue = case SkipSource of true -> Queue; false -> queue:in(Source, Queue) end,
-                    loop(Pid, Collection, Pool, UpdatedQueue, Package);
+                    case SkipSource of
+                        true -> ok;
+                        false -> ets:insert(Queue, {Source})
+                    end,
+                    loop(Pid, Collection, Pool, Queue, Package);
 
                 {atom, Atom, File, Location} ->
                     Pid ! {atom, Atom, File, Location},
@@ -90,21 +100,23 @@ loop(Pid, Collection, Pool, Queue, Package) ->
                         {dir, _} -> ok;
                         _ -> atomizer_progress:increase_elapsed(1)
                     end,
-                    loop(Pid, sets:add_element(Source, Collection), sets:del_element(Source, Pool), Queue, Package);
+                    ets:insert(Collection, {Source}),
+                    ets:delete(Pool, Source),
+                    loop(Pid, Collection, Pool, Queue, Package);
 
                 {error, Error} ->
                     {error, Error}
             end
     end.
 
--spec collected_statistics(sets:set(atomizer:source())) -> {NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()}.
+-spec collected_statistics(ets:tid()) -> {NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()}.
 collected_statistics(Collection) ->
-    sets:fold(fun (Source, {NrFiles, NrDirs}) ->
-                  case Source of
-                      {dir, _} -> {NrFiles, NrDirs + 1};
-                      _        -> {NrFiles + 1, NrDirs}
-                  end
-              end, {0, 0}, Collection).
+    ets:foldl(fun ({Source}, {NrFiles, NrDirs}) ->
+                   case Source of
+                       {dir, _} -> {NrFiles, NrDirs + 1};
+                       _        -> {NrFiles + 1, NrDirs}
+                   end
+               end, {0, 0}, Collection).
 
 -spec format_error({module(), term()}) -> io_lib:chars().
 format_error({Module, Error}) ->
