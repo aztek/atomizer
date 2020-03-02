@@ -144,9 +144,12 @@ show_statistics(Stats) ->
     ThisManyAtoms      = pretty_quantity(atomizer:get_nr_atoms(Stats),       "atom",       "atoms"),
     ThisManyFiles      = pretty_quantity(atomizer:get_nr_files(Stats),       "file",       "files"),
     ThisManyDirs       = pretty_quantity(atomizer:get_nr_dirs(Stats),        "directory",  "directories"),
-    Message = ["Found" | [[ThisManyLooseAtoms, "among"] || atomizer:get_nr_loose_atoms(Stats) >= 0]] ++
-              [ThisManyAtoms, "in", ThisManyFiles, "and", ThisManyDirs],
-    atomizer:print(["\n", atomizer:words(Message), "."]).
+    Found = case atomizer:get_nr_loose_atoms(Stats) >= 0 of
+                true  -> ["Found", ThisManyLooseAtoms, "among"];
+                false -> ["Found"]
+            end,
+    Message = Found ++ [ThisManyAtoms, "in", ThisManyFiles, "and", ThisManyDirs],
+    atomizer:print([atomizer:words(Message), "."]).
 
 -spec pretty_quantity(non_neg_integer(), string(), string()) -> io_lib:chars().
 pretty_quantity(Amount, Singular, Plural) ->
