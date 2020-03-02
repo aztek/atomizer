@@ -128,30 +128,31 @@ package(#options{paths = Paths, includes = Includes, parse_beams = ParseBeams}) 
 %%% Global dictionary of command line arguments populated at startup
 
 -define(CLI_TABLE, cli).
--define(CLI_ACTION, action).
--define(CLI_WARN_ERRORS, warn_errors).
--define(CLI_VERBOSITY, verbosity).
 
 -spec init(options()) -> ok.
-init(#options{action = Action, warn_errors = WarnErrors, verbosity = Verbosity}) ->
+init(Options) ->
     ets:new(?CLI_TABLE, [set, protected, named_table]),
-    ets:insert(?CLI_TABLE, {?CLI_ACTION, Action}),
-    ets:insert(?CLI_TABLE, {?CLI_WARN_ERRORS, WarnErrors}),
-    ets:insert(?CLI_TABLE, {?CLI_VERBOSITY, Verbosity}),
+    ets:insert(?CLI_TABLE, {options, Options}),
     ok.
 
--spec get(atom(), term()) -> term().
-get(Param, Default) ->
-    case ets:lookup(?CLI_TABLE, Param) of
-        [{Param, Value}] -> Value;
-        _ -> Default
+-spec get_options() -> options().
+get_options() ->
+    case ets:lookup(?CLI_TABLE, options) of
+        [{options, Options}] -> Options;
+        _ -> #options{}
     end.
 
 -spec get_warn_errors() -> boolean().
-get_warn_errors() -> get(?CLI_WARN_ERRORS, false).
+get_warn_errors() ->
+    Options = get_options(),
+    Options#options.warn_errors.
 
 -spec get_verbosity() -> verbosity().
-get_verbosity() -> get(?CLI_VERBOSITY, 2).
+get_verbosity() ->
+    Options = get_options(),
+    Options#options.verbosity.
 
 -spec get_action() -> action().
-get_action() -> get(?CLI_ACTION, warn).
+get_action() ->
+    Options = get_options(),
+    Options#options.action.
