@@ -48,8 +48,8 @@ traverse_paths(Pid, Paths) ->
 -spec traverse_path(pid(), file:filename()) -> ignore | {add_source, atomizer:source()} | {error, error()}.
 traverse_path(Pid, Path) ->
     case detect_source(Path) of
-        {ok, other}  -> ignore;
         {ok, Source} -> Pid ! {add_source, Source};
+        ignore -> ignore;
         {error, {Module, Error}} ->
             case atomizer_cli_options:get_warn_errors() of
                 true ->
@@ -60,25 +60,31 @@ traverse_path(Pid, Path) ->
             end
     end.
 
--spec detect_source(file:filename()) -> {ok, atomizer:source() | other} | {error, {?MODULE, error()}}.
+-spec detect_source(file:filename()) -> {ok, atomizer:source()} | ignore | {error, {?MODULE, error()}}.
 detect_source(Path) ->
     case resolve_real_path(Path) of
         {ok, RealPath} ->
-            case file:read_file_info(RealPath) of
-                {ok, Info} ->
-                    Type     = Info#file_info.type,
-                    IsErlang = is_erlang(RealPath),
-                    IsBeam   = is_beam(RealPath),
-                    Source = if
-                                 Type == directory         -> {dir,  Path};
-                                 Type == regular, IsErlang -> {erl,  Path};
-                                 Type == regular, IsBeam   -> {beam, Path};
-                                 true -> other
-                             end,
-                    {ok, Source};
+            Basename  = filename:basename(RealPath),
+            Ignores   = atomizer:global_ignores(),
+            IsIgnored = lists:member(Basename, Ignores),
+            case IsIgnored of
+                true  -> ignore;
+                false ->
+                    case file:read_file_info(RealPath) of
+                        {ok, Info} ->
+                            Type     = Info#file_info.type,
+                            IsErlang = is_erlang(RealPath),
+                            IsBeam   = is_beam(RealPath),
+                            case Type of
+                                directory             -> {ok, {dir,  Path}};
+                                regular when IsErlang -> {ok, {erl,  Path}};
+                                regular when IsBeam   -> {ok, {beam, Path}};
+                                _                     -> ignore
+                            end;
 
-                {error, Error} ->
-                    {error, {?MODULE, {{Path, RealPath}, {file, Error}}}}
+                        {error, Error} ->
+                            {error, {?MODULE, {{Path, RealPath}, {file, Error}}}}
+                    end
             end;
 
         {error, Error} ->

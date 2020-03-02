@@ -9,6 +9,8 @@
     nr_files/1,
     nr_occurrences/1,
 
+    global_ignores/0,
+
     statistics/4,
     get_nr_loose_atoms/1,
     get_nr_atoms/1,
@@ -123,6 +125,10 @@ nr_files(Locations) -> maps:size(Locations).
 nr_occurrences(Locations) ->
     maps:fold(fun (_, V, S) -> sets:size(V) + S end, 0, Locations).
 
+
+-spec global_ignores() -> [file:filename()].
+global_ignores() ->
+    [".git", ".hg", ".svn", ".idea"].
 
 %%% Printing to standard outputs
 

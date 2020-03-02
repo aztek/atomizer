@@ -30,7 +30,6 @@ collect_sources(Package) ->
     Collect = fun (_, {error, Error}) -> {error, Error};
                   (Path, {ok, Sources}) ->
                       case atomizer_traverse:detect_source(Path) of
-                          {ok, other} -> {ok, Sources};
                           {ok, {beam, _}} when not ParseBeams -> {ok, Sources};
                           {ok, Source} ->
                               case Source of
@@ -38,6 +37,7 @@ collect_sources(Package) ->
                                   _ -> atomizer_progress:increase_total(1)
                               end,
                               {ok, [Source | Sources]};
+                          ignore -> {ok, Sources};
                           {error, Error} ->
                               case atomizer_cli_options:get_warn_errors() of
                                   true ->
