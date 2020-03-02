@@ -76,9 +76,9 @@ detect_source(Path) ->
                             IsErlang = is_erlang(RealPath),
                             IsBeam   = is_beam(RealPath),
                             case Type of
-                                directory             -> {ok, {dir,  Path}};
-                                regular when IsErlang -> {ok, {erl,  Path}};
-                                regular when IsBeam   -> {ok, {beam, Path}};
+                                directory             -> {ok, {dir,  RealPath}};
+                                regular when IsErlang -> {ok, {erl,  RealPath}};
+                                regular when IsBeam   -> {ok, {beam, RealPath}};
                                 _                     -> ignore
                             end;
 
@@ -105,8 +105,10 @@ resolve_real_path(Path, Fuel) ->
                    absolute -> SymlinkPath;
                    relative -> filename:absname(filename:join(filename:dirname(Destination), SymlinkPath))
                end,
-            RealPath = normalize_path(AbsoluteSymlinkPath),
-            resolve_real_path({Source, RealPath}, Fuel - 1);
+            case normalize_path(AbsoluteSymlinkPath) of
+                Destination -> {error, {Path, {file, eloop}}};
+                RealPath -> resolve_real_path({Source, RealPath}, Fuel - 1)
+            end;
 
         {error, enoent} ->
             {error, {Path, {file, enoent}}};
