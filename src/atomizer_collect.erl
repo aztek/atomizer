@@ -70,7 +70,7 @@ loop(Pid, Collection, Pool, Queue, Package) ->
         {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_FILE_LIMIT, QueueSize > 0 ->
             Source = ets:first(Queue),
             ets:delete(Queue, Source),
-            spawn_link(atomizer_traverse, traverse, [self(), Source, atomizer:package_includes(Package)]),
+            spawn_link(atomizer_traverse, traverse, [self(), Source, Package]),
             ets:insert(Pool, {Source}),
             loop(Pid, Collection, Pool, Queue, Package);
 

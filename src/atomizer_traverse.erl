@@ -15,9 +15,9 @@
 -type symlink() :: {Source :: file:filename(), Destination :: file:filename()}.
 -type error()   :: {file:filename() | symlink(), {module(), atom()}}.
 
--spec traverse(pid(), atomizer:source(), [file:filename()]) -> {done_source, atomizer:source()} | {error, {module(), term()}}.
-traverse(Pid, Source, IncludePaths) ->
-    case read_source(Pid, Source, IncludePaths) of
+-spec traverse(pid(), atomizer:source(), atomizer:package()) -> {done_source, atomizer:source()} | {error, {module(), term()}}.
+traverse(Pid, Source, Package) ->
+    case read_source(Pid, Source, Package) of
         ok -> Pid ! {done_source, Source};
         {error, {Module, Error}} ->
             case atomizer_cli_options:get_warn_errors() of
@@ -29,8 +29,9 @@ traverse(Pid, Source, IncludePaths) ->
             end
     end.
 
--spec read_source(pid(), atomizer:source(), [file:filename()]) -> ok | {error, {module(), term()}}.
-read_source(Pid, Source, IncludePaths) ->
+-spec read_source(pid(), atomizer:source(), atomizer:package()) -> ok | {error, {module(), term()}}.
+read_source(Pid, Source, Package) ->
+    IncludePaths = atomizer:package_includes(Package),
     case Source of
         {erl,  File} -> atomizer_parse:parse_erl(Pid, File, IncludePaths);
         {beam, File} -> atomizer_parse:parse_beam(Pid, File);
