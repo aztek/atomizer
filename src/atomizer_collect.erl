@@ -77,17 +77,18 @@ loop(Pid, Collection, Pool, Queue, Package) ->
         _ ->
             receive
                 {add_source, Source = {Type, _}} ->
-                    case Source of
-                        {dir, _} -> ok;
-                        _ -> atomizer_progress:increase_total(1)
-                    end,
                     SkipSource = ets:member(Pool, Source) orelse
                                  ets:member(Collection, Source) orelse
                                  ets:member(Queue, Source) orelse
                                  (not atomizer:package_parse_beams(Package) andalso (Type == beam)),
                     case SkipSource of
                         true -> ok;
-                        false -> ets:insert(Queue, {Source})
+                        false ->
+                            ets:insert(Queue, {Source}),
+                            case Source of
+                                {dir, _} -> ok;
+                                _ -> atomizer_progress:increase_total(1)
+                            end
                     end,
                     loop(Pid, Collection, Pool, Queue, Package);
 
