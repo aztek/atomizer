@@ -2,7 +2,7 @@
 
 -include_lib("kernel/include/file.hrl").
 
--define(OPEN_FILE_LIMIT, 10).
+-define(OPEN_FILE_LIMIT, 4).
 
 -export([
     collect/2,
