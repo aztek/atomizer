@@ -19,6 +19,7 @@
 
     print/1,
     print/2,
+    nl/0,
     error/1,
     error/2,
     warning/1,
@@ -138,9 +139,13 @@ print(Message) ->
 print(Format, Args) ->
     ?MODULE:print(io_lib:format(Format, Args)).
 
+nl() ->
+    atomizer_output:put_chars(standard_io, "\n").
+
 -spec error(io_lib:chars()) -> ok.
 error(Error) ->
-    atomizer_output:put_chars(standard_error, [atomizer_output:red(["Error: ", Error]), "\n"]).
+    Message = [atomizer_output:bold("Error: "), Error],
+    atomizer_output:put_chars(standard_error, [atomizer_output:red(Message), "\n"]).
 
 -spec error(string(), [term()]) -> ok.
 error(Format, Args) ->
@@ -150,7 +155,9 @@ error(Format, Args) ->
 warning(Warning) ->
     case atomizer_cli_options:get_verbosity() of
         0 -> ok;
-        _ -> atomizer_output:put_chars(standard_error, [atomizer_output:yellow(["Warning: ", Warning]), "\n"])
+        _ ->
+            Message = [atomizer_output:bold("Warning: "), Warning],
+            atomizer_output:put_chars(standard_error, [atomizer_output:yellow(Message), "\n"])
     end.
 
 -spec warning(string(), [term()]) -> ok.
