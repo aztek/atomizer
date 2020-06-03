@@ -97,27 +97,27 @@ show_abridged_list(Printer, List) ->
     case length(List) of
         ListLength when Verbosity =< 1, ListLength > PreviewLength + 1 ->
             lists:foreach(Printer, lists:sublist(List, PreviewLength)),
-            atomizer:print(["... ", atomizer_output:italic(["(", integer_to_list(ListLength - PreviewLength), " more)"])]);
+            atomizer:print(["... ", atomizer_output:cyan(["(", integer_to_list(ListLength - PreviewLength), " more)"])]);
         _ ->
             lists:foreach(Printer, List)
     end,
     {ok, 0}.
 
--spec show_atom(atomizer:atom_info()) -> {ok, exit_code()}.
-show_atom({Atom, Locations}) ->
-    atomizer:print(["\n" | atomizer_output:bold(atomizer:pretty_atom(Atom))]),
+-spec show_locations(atomizer:locations()) -> ok.
+show_locations(Locations) ->
     Info = [{filename:absname(File), lists:sort(sets:to_list(Positions)), sets:size(Positions)} ||
             {File, Positions} <- maps:to_list(Locations)],
     Files = lists:reverse(lists:keysort(3, Info)),
     ShowLocation = fun ({File, Positions, NrPositions}) -> show_location(File, Positions, NrPositions) end,
-    show_abridged_list(ShowLocation, Files).
+    show_abridged_list(ShowLocation, Files),
+    atomizer:nl().
 
 -spec show_location(file:filename(), [atomizer:position()], non_neg_integer()) -> {ok, exit_code()}.
 show_location(File, Positions, NrPositions) ->
     case atomizer_cli_options:get_verbosity() of
         0 ->
             Occurrences = [integer_to_list(NrPositions), " ", atomizer:plural(NrPositions, "occurrence", "occurrences")],
-            atomizer:print([File, " ", atomizer_output:italic(["(", Occurrences, ")"])]);
+            atomizer:print([File, " ", atomizer_output:cyan(["(", Occurrences, ")"])]);
         _ ->
             ShowPosition = fun (Position) -> atomizer:print([File, ":" | show_position(Position)]) end,
             show_abridged_list(ShowPosition, Positions)
@@ -155,11 +155,33 @@ show_statistics(Stats) ->
 pretty_quantity(Amount, Singular, Plural) ->
     [atomizer_output:bold(integer_to_list(Amount)), " ", atomizer:plural(Amount, Singular, Plural)].
 
+-spec show_atom(atomizer:atom_info()) -> {ok, exit_code()}.
+show_atom({Atom, Locations}) ->
+    atomizer:print(atomizer_output:bold(atomizer:pretty_atom(Atom))),
+    show_locations(Locations).
+
+-spec show_atom(atomizer:atom_info(), atom()) -> {ok, exit_code()}.
+show_atom({Atom, Locations}, Lookalike) ->
+    atomizer:print(atomizer_output:bold(show_difference(Atom, Lookalike))),
+    show_locations(Locations).
+
+-spec show_difference(atom(), atom()) -> io_lib:chars().
+show_difference(Loose, Lookalike) ->
+    show_difference_helper(atomizer:pretty_atom(Loose), atomizer:pretty_atom(Lookalike)).
+
+-spec show_difference_helper(string(), string()) -> io_lib:chars().
+show_difference_helper(Loose, []) -> Loose;
+show_difference_helper([], _) -> [];
+show_difference_helper([K | Loose], [C | Lookalike]) ->
+    if
+        K == C -> [K | show_difference_helper(Loose, Lookalike)];
+        K == $_; K == $- -> [atomizer_output:green([K]) | show_difference_helper(Loose, [C | Lookalike])];
+        C == $_; C == $- -> show_difference_helper([K | Loose], Lookalike);
+        true -> [atomizer_output:yellow([K]) | show_difference_helper(Loose, Lookalike)]
+    end.
+
 -spec show_loose_atom(atomizer:loose_atom()) -> ok.
-show_loose_atom({{Loose, _} = LooseInfo, {Lookalike, _} = LookalikeInfo}) ->
-    PrettyLoose     = atomizer_output:bold(atomizer:pretty_atom(Loose)),
-    PrettyLookalike = atomizer_output:bold(atomizer:pretty_atom(Lookalike)),
-    atomizer:print(atomizer_output:cyan(atomizer:words([PrettyLoose, "vs", PrettyLookalike]))),
-    show_atom(LooseInfo),
-    show_atom(LookalikeInfo),
-    atomizer:print("\n").
+show_loose_atom({_Loose, _} = {LooseAtomInfo, {Lookalike, _} = LookalikeAtomInfo}) ->
+    show_atom(LooseAtomInfo, Lookalike),
+    show_atom(LookalikeAtomInfo),
+    atomizer:nl().

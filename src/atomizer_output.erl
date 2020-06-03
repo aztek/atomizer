@@ -9,9 +9,13 @@
 
     red/1,
     yellow/1,
+    green/1,
+    blue/1,
+    magenta/1,
     cyan/1,
     bold/1,
-    italic/1
+    italic/1,
+    invert/1
 ]).
 
 -define(PROCESS_NAME, ?MODULE).
@@ -109,10 +113,14 @@ erase_progress_bar(LastShownProgressBar) ->
 %%% Colored ASCII output
 
 -define(RED,    "\e[31m").
+-define(GREEN,  "\e[32m").
 -define(YELLOW, "\e[33m").
+-define(BLUE,   "\e[34m").
+-define(MAGENTA,"\e[35m").
 -define(CYAN,   "\e[36m").
 -define(BOLD,   "\e[1m").
 -define(ITALIC, "\e[3m").
+-define(INVERT, "\e[7m").
 -define(CLEAR,  "\e[00m").
 
 -spec ascii_color(string(), io_lib:chars()) -> io_lib:chars().
@@ -131,6 +139,15 @@ red(Chars) -> ascii_color(?RED, Chars).
 -spec yellow(io_lib:chars()) -> io_lib:chars().
 yellow(Chars) -> ascii_color(?YELLOW, Chars).
 
+-spec blue(io_lib:chars()) -> io_lib:chars().
+blue(Chars) -> ascii_color(?BLUE, Chars).
+
+-spec green(io_lib:chars()) -> io_lib:chars().
+green(Chars) -> ascii_color(?GREEN, Chars).
+
+-spec magenta(io_lib:chars()) -> io_lib:chars().
+magenta(Chars) -> ascii_color(?MAGENTA, Chars).
+
 -spec cyan(io_lib:chars()) -> io_lib:chars().
 cyan(Chars) -> ascii_color(?CYAN, Chars).
 
@@ -139,3 +156,6 @@ bold(Chars) -> ascii_color(?BOLD, Chars).
 
 -spec italic(io_lib:chars()) -> io_lib:chars().
 italic(Chars) -> ascii_color(?ITALIC, Chars).
+
+-spec invert(io_lib:chars()) -> io_lib:chars().
+invert(Chars) -> ascii_color(?INVERT, Chars).
