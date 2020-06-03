@@ -96,8 +96,8 @@ is_loose({_, LocationsA} = A, {_, LocationsB} = B) ->
 
     {{Loose, Lookalike}, Min, Max} =
         case NrOccurrencesA < NrOccurrencesB of
-            true  -> {{B, A}, NrOccurrencesA, NrOccurrencesB};
-            false -> {{A, B}, NrOccurrencesB, NrOccurrencesA}
+            true  -> {{A, B}, NrOccurrencesA, NrOccurrencesB};
+            false -> {{B, A}, NrOccurrencesB, NrOccurrencesA}
         end,
 
     Disproportion = 4,
