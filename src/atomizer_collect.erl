@@ -34,12 +34,9 @@ collect_paths(Pid, Package) ->
 
 -spec collect_sources(atomizer:package()) -> {ok, [atomizer:source()]} | {error, term()}.
 collect_sources(Package) ->
-    Paths = atomizer:package_paths(Package),
-    ParseBeams = atomizer:package_parse_beams(Package),
     Collect = fun (_, {error, Error}) -> {error, Error};
                   (Path, {ok, Sources}) ->
                       case atomizer_traverse:detect_source(Path, Package) of
-                          {ok, {beam, _}} when not ParseBeams -> {ok, Sources};
                           {ok, Source} ->
                               case Source of
                                   {dir, _} -> ok;
@@ -57,7 +54,7 @@ collect_sources(Package) ->
                               end
                       end
               end,
-    lists:foldl(Collect, {ok, []}, Paths).
+    lists:foldl(Collect, {ok, []}, atomizer:package_paths(Package)).
 
 -spec loop(pid(), ets:tid(), ets:tid(), ets:tid(), atomizer:package()) ->
     {ok, NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()} | {error, term()}.
@@ -79,8 +76,7 @@ loop(Pid, Collection, Pool, Queue, Package) ->
                 {add_source, Source = {Type, _}} ->
                     SkipSource = ets:member(Pool, Source) orelse
                                  ets:member(Collection, Source) orelse
-                                 ets:member(Queue, Source) orelse
-                                 (not atomizer:package_parse_beams(Package) andalso (Type == beam)),
+                                 ets:member(Queue, Source),
                     case SkipSource of
                         true -> ok;
                         false ->

@@ -37,7 +37,7 @@ read_source(Pid, Source, Package) ->
         {beam, File} -> atomizer_parse:parse_beam(Pid, File);
         {dir,  Dir}  ->
             case file:list_dir(Dir) of
-                {ok, Names}    -> traverse_paths(Pid, Package, [filename:join(Dir, Name) || Name <- Names]);
+                {ok, Names} -> traverse_paths(Pid, Package, [filename:join(Dir, Name) || Name <- Names]);
                 {error, Error} -> {error, {?MODULE, {Dir, {file, Error}}}}
             end
     end.
@@ -72,14 +72,15 @@ detect_source(Path, Package) ->
                 false ->
                     case file:read_file_info(RealPath) of
                         {ok, Info} ->
-                            Type     = Info#file_info.type,
-                            IsErlang = is_erlang(RealPath),
-                            IsBeam   = is_beam(RealPath),
+                            Type       = Info#file_info.type,
+                            IsErlang   = is_erlang(RealPath),
+                            IsBeam     = is_beam(RealPath),
+                            ParseBeams = atomizer:package_parse_beams(Package),
                             case Type of
-                                directory             -> {ok, {dir,  RealPath}};
+                                directory -> {ok, {dir,  RealPath}};
                                 regular when IsErlang -> {ok, {erl,  RealPath}};
-                                regular when IsBeam   -> {ok, {beam, RealPath}};
-                                _                     -> ignore
+                                regular when IsBeam, ParseBeams -> {ok, {beam, RealPath}};
+                                _ -> ignore
                             end;
 
                         {error, Error} ->
@@ -99,7 +100,7 @@ resolve_real_path(Path, Package) -> resolve_real_path(Path, Package, ?MAX_LEVEL_
 
 -spec resolve_real_path(file:filename() | symlink(), atomizer:package(), Fuel :: non_neg_integer()) ->
     {ok, file:filename()} | ignore | {error, error()}.
-resolve_real_path(Path, Package, 0) -> {error, {Path, {file, eloop}}};
+resolve_real_path(Path, _Package, 0) -> {error, {Path, {file, eloop}}};
 resolve_real_path(Path, Package, Fuel) ->
     FollowSymlinks = atomizer:package_follow_symlinks(Package),
     {Source, Destination} = case Path of {_, _} -> Path; _ -> {Path, Path} end,
