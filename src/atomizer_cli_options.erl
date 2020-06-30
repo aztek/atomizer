@@ -21,6 +21,7 @@
 -record(options, {
     action      = warn  :: action(),
     paths       = []    :: [file:filename()],
+    ignores     = []    :: [file:filename()],
     includes    = []    :: [file:filename()],
     parse_beams = false :: boolean(),
     warn_errors = false :: boolean(),
@@ -45,6 +46,15 @@ parse([CmdArg | CmdArgs], Options) ->
         Option  -> parse_option(Option, CmdArgs, Options)
     end.
 
+-spec parse_ignores([string()], options()) -> {ok, options()} | {message, string()} | {error, string()}.
+parse_ignores([], Options) -> {options, Options};
+parse_ignores([CmdArg | CmdArgs], Options) ->
+    case string:prefix(CmdArg, "-") of
+        nomatch -> parse_ignores(CmdArgs, Options#options{ignores = [CmdArg | Options#options.ignores]});
+        Option  -> parse_option(Option, CmdArgs, Options)
+    end.
+
+
 -spec parse_includes([string()], options()) -> {ok, options()} | {message, string()} | {error, string()}.
 parse_includes([], Options) -> {options, Options};
 parse_includes([CmdArg | CmdArgs], Options) ->
@@ -68,6 +78,9 @@ parse_option(Option, CmdArgs, Options) ->
                     {error, Error}
             end;
 
+        _Ignores when Option == "x"; Option == "-ignore" ->
+            parse_ignores(CmdArgs, Options);
+
         _Includes when Option == "i"; Option == "I"; Option == "-include" ->
             parse_includes(CmdArgs, Options);
 
@@ -87,7 +100,7 @@ parse_option(Option, CmdArgs, Options) ->
             end;
 
         _ ->
-            {error, "Unrecognized option."}
+            {error, ["Unrecognized option ", atomizer_output:bold(["-", Option]), "."]}
     end.
 
 -spec parse_action([string()]) -> {ok, action(), [string()]} | {error, string()}.
@@ -111,8 +124,10 @@ parse_verbosity([CmdArg | CmdArgs]) ->
     end.
 
 usage() ->
-    "Usage: atomizer [-a | --action ACTION] [-b | --parse-beams] [-i | -I | --include PATH*]\n" ++
-    "                [-w | --warn-errors] [-v | --verbosity VERBOSITY] PATH*\n".
+    "Usage: atomizer [-a | --action ACTION] [-b | --parse-beams]\n" ++
+    "                [-x | --ignore PATH*] [-i | -I | --include PATH*]\n" ++
+    "                [-w | --warn-errors] [-v | --verbosity VERBOSITY]\n" ++
+    "                PATH*\n".
 
 help() ->
     "".
@@ -121,8 +136,8 @@ help() ->
 %%%
 
 -spec package(options()) -> atomizer:package().
-package(#options{paths = Paths, includes = Includes, parse_beams = ParseBeams}) ->
-    atomizer:package(Paths, Includes, ParseBeams).
+package(#options{paths = Paths, ignores = Ignores, includes = Includes, parse_beams = ParseBeams}) ->
+    atomizer:package(Paths, Ignores, Includes, ParseBeams).
 
 
 %%% Global dictionary of command line arguments populated at startup

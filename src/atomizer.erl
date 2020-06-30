@@ -1,8 +1,9 @@
 -module(atomizer).
 
 -export([
-    package/3,
+    package/4,
     package_paths/1,
+    package_ignores/1,
     package_includes/1,
     package_parse_beams/1,
 
@@ -60,17 +61,26 @@
 
 -record(package, {
     paths       = []    :: [file:filename()],
+    ignores     = []    :: [file:filename()],
     includes    = []    :: [file:filename()],
     parse_beams = false :: boolean()
 }).
 -opaque package() :: #package{}.
 
--spec package([file:filename()], [file:filename()], boolean()) -> package().
-package(Paths, Includes, ParseBeams) ->
-    #package{paths = Paths, includes = Includes, parse_beams = ParseBeams}.
+-spec package([file:filename()], [file:filename()], [file:filename()], boolean()) -> package().
+package(Paths, Ignores, Includes, ParseBeams) ->
+    #package{
+        paths       = Paths,
+        ignores     = Ignores,
+        includes    = Includes,
+        parse_beams = ParseBeams
+    }.
 
 -spec package_paths(package()) -> [file:filename()].
 package_paths(#package{paths = Paths}) -> Paths.
+
+-spec package_ignores(package()) -> [file:filename()].
+package_ignores(#package{ignores = Ignores}) -> Ignores.
 
 -spec package_includes(package()) -> [file:filename()].
 package_includes(#package{includes = Includes}) -> Includes.
@@ -126,10 +136,10 @@ nr_files(Locations) -> maps:size(Locations).
 nr_occurrences(Locations) ->
     maps:fold(fun (_, V, S) -> sets:size(V) + S end, 0, Locations).
 
-
 -spec global_ignores() -> [file:filename()].
 global_ignores() ->
     [".git", ".hg", ".svn", ".idea"].
+
 
 %%% Printing to standard outputs
 

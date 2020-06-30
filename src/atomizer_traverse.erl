@@ -8,7 +8,7 @@
 
 -export([
     traverse/3,
-    detect_source/1,
+    detect_source/2,
     format_error/1
 ]).
 
@@ -31,24 +31,25 @@ traverse(Pid, Source, Package) ->
 
 -spec read_source(pid(), atomizer:source(), atomizer:package()) -> ok | {error, {module(), term()}}.
 read_source(Pid, Source, Package) ->
+    IgnorePaths  = atomizer:package_ignores(Package),
     IncludePaths = atomizer:package_includes(Package),
     case Source of
         {erl,  File} -> atomizer_parse:parse_erl(Pid, File, IncludePaths);
         {beam, File} -> atomizer_parse:parse_beam(Pid, File);
         {dir,  Dir}  ->
             case file:list_dir(Dir) of
-                {ok, Names}    -> traverse_paths(Pid, [filename:join(Dir, Name) || Name <- Names]);
+                {ok, Names}    -> traverse_paths(Pid, IgnorePaths, [filename:join(Dir, Name) || Name <- Names]);
                 {error, Error} -> {error, {?MODULE, {Dir, {file, Error}}}}
             end
     end.
 
--spec traverse_paths(pid(), [file:filename()]) -> any().
-traverse_paths(Pid, Paths) ->
-    lists:foreach(fun (Path) -> traverse_path(Pid, Path) end, Paths).
+-spec traverse_paths(pid(), [file:filename()], [file:filename()]) -> any().
+traverse_paths(Pid, IgnorePaths, Paths) ->
+    lists:foreach(fun (Path) -> traverse_path(Pid, IgnorePaths, Path) end, Paths).
 
--spec traverse_path(pid(), file:filename()) -> ignore | {add_source, atomizer:source()} | {error, error()}.
-traverse_path(Pid, Path) ->
-    case detect_source(Path) of
+-spec traverse_path(pid(), [file:filename()], file:filename()) -> ignore | {add_source, atomizer:source()} | {error, error()}.
+traverse_path(Pid, IgnorePaths, Path) ->
+    case detect_source(Path, IgnorePaths) of
         {ok, Source} -> Pid ! {add_source, Source};
         ignore -> ignore;
         {error, {Module, Error}} ->
@@ -61,14 +62,13 @@ traverse_path(Pid, Path) ->
             end
     end.
 
--spec detect_source(file:filename()) -> {ok, atomizer:source()} | ignore | {error, {?MODULE, error()}}.
-detect_source(Path) ->
+-spec detect_source(file:filename(), [file:filename()]) -> {ok, atomizer:source()} | ignore | {error, {?MODULE, error()}}.
+detect_source(Path, PackageIgnorePaths) ->
     case resolve_real_path(Path) of
         {ok, RealPath} ->
-            Basename  = filename:basename(RealPath),
-            Ignores   = atomizer:global_ignores(),
-            IsIgnored = lists:member(Basename, Ignores),
-            case IsIgnored of
+            Basename    = filename:basename(RealPath),
+            IgnorePaths = atomizer:global_ignores() ++ PackageIgnorePaths,
+            case lists:member(Basename, IgnorePaths) of
                 true  -> ignore;
                 false ->
                     case file:read_file_info(RealPath) of
