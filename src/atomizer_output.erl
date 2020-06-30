@@ -84,30 +84,26 @@ hide_progress() ->
     ?PROCESS_NAME ! hide_progress,
     ok.
 
--spec draw_progress_bar(string()) -> ok.
+-define(HIDE_CURSOR, "\e[?25l").
+-define(SHOW_CURSOR, "\e[?25h").
+
+-spec draw_progress_bar(io_lib:chars()) -> ok.
 draw_progress_bar(ProgressBar) ->
-    io:put_chars(?PROGRESS_BAR_DEVICE, ProgressBar).
+    io:put_chars(?PROGRESS_BAR_DEVICE, [?HIDE_CURSOR, ProgressBar, ?SHOW_CURSOR]).
 
 -spec halt(non_neg_integer()) -> ok.
 halt(ExitCode) ->
     ?PROCESS_NAME ! {halt, ExitCode},
     ok.
 
--define(HIDE_CURSOR, "\e[?25l").
--define(SHOW_CURSOR, "\e[?25h").
-
--spec redraw_progress_bar(string(), string()) -> ok.
+-spec redraw_progress_bar(io_lib:chars(), io_lib:chars()) -> ok.
 redraw_progress_bar(LastShownProgressBar, ProgressBar) ->
-    io:put_chars(?PROGRESS_BAR_DEVICE, ?HIDE_CURSOR),
-    io:put_chars(?PROGRESS_BAR_DEVICE, lists:duplicate(length(LastShownProgressBar), "\b")),
-    draw_progress_bar(ProgressBar),
-    io:put_chars(?PROGRESS_BAR_DEVICE, ?SHOW_CURSOR).
+    Eraser = lists:duplicate(length(LastShownProgressBar), "\b"),
+    draw_progress_bar([Eraser, ProgressBar]).
 
--spec erase_progress_bar(string()) -> ok.
+-spec erase_progress_bar(io_lib:chars()) -> ok.
 erase_progress_bar(LastShownProgressBar) ->
-    io:put_chars(?PROGRESS_BAR_DEVICE, ?HIDE_CURSOR),
-    io:put_chars(?PROGRESS_BAR_DEVICE, lists:duplicate(length(LastShownProgressBar), "\b \b")),
-    io:put_chars(?PROGRESS_BAR_DEVICE, ?SHOW_CURSOR).
+    draw_progress_bar(lists:duplicate(length(LastShownProgressBar), "\b \b")).
 
 
 %%% Colored ASCII output
@@ -130,7 +126,8 @@ ascii_color(Color, Chars) -> [Color, ascii_recolor(Color, Chars), ?CLEAR].
 ascii_recolor(Color, Chars) ->
     lists:flatmap(fun (?CLEAR) -> [?CLEAR, Color];
                       (Chunks) when is_list(Chunks) -> [ascii_recolor(Color, Chunks)];
-                      (Char) -> [Char] end,
+                      (Char) -> [Char]
+                  end,
                   Chars).
 
 -spec red(io_lib:chars()) -> io_lib:chars().
