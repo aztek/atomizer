@@ -35,11 +35,10 @@ collect_paths(Pid, Package) ->
 -spec collect_sources(atomizer:package()) -> {ok, [atomizer:source()]} | {error, term()}.
 collect_sources(Package) ->
     Paths = atomizer:package_paths(Package),
-    IgnorePaths = atomizer:package_ignores(Package),
     ParseBeams = atomizer:package_parse_beams(Package),
     Collect = fun (_, {error, Error}) -> {error, Error};
                   (Path, {ok, Sources}) ->
-                      case atomizer_traverse:detect_source(Path, IgnorePaths) of
+                      case atomizer_traverse:detect_source(Path, Package) of
                           {ok, {beam, _}} when not ParseBeams -> {ok, Sources};
                           {ok, Source} ->
                               case Source of

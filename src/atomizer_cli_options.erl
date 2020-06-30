@@ -19,13 +19,14 @@
 %%% The type of command line options
 
 -record(options, {
-    action      = warn  :: action(),
-    paths       = []    :: [file:filename()],
-    ignores     = []    :: [file:filename()],
-    includes    = []    :: [file:filename()],
-    parse_beams = false :: boolean(),
-    warn_errors = false :: boolean(),
-    verbosity   = 1     :: verbosity()
+    action          = warn  :: action(),
+    paths           = []    :: [file:filename()],
+    ignores         = []    :: [file:filename()],
+    includes        = []    :: [file:filename()],
+    follow_symlinks = false :: boolean(),
+    parse_beams     = false :: boolean(),
+    warn_errors     = false :: boolean(),
+    verbosity       = 1     :: verbosity()
 }).
 -opaque options() :: #options{}.
 
@@ -84,6 +85,9 @@ parse_option(Option, CmdArgs, Options) ->
         _Includes when Option == "i"; Option == "I"; Option == "-include" ->
             parse_includes(CmdArgs, Options);
 
+        _FollowSymlinks when Option == "l"; Option == "-follow-symlinks" ->
+            parse(CmdArgs, Options#options{follow_symlinks = true});
+
         _ParseBeams when Option == "b"; Option == "-parse-beams" ->
             parse(CmdArgs, Options#options{parse_beams = true});
 
@@ -126,8 +130,8 @@ parse_verbosity([CmdArg | CmdArgs]) ->
 usage() ->
     "Usage: atomizer [-a | --action ACTION] [-b | --parse-beams]\n" ++
     "                [-x | --ignore PATH*] [-i | -I | --include PATH*]\n" ++
-    "                [-w | --warn-errors] [-v | --verbosity VERBOSITY]\n" ++
-    "                PATH*\n".
+    "                [-l | --follow-symlinks] [-w | --warn-errors]\n"
+    "                [-v | --verbosity VERBOSITY] PATH*\n".
 
 help() ->
     "".
@@ -136,8 +140,15 @@ help() ->
 %%%
 
 -spec package(options()) -> atomizer:package().
-package(#options{paths = Paths, ignores = Ignores, includes = Includes, parse_beams = ParseBeams}) ->
-    atomizer:package(Paths, Ignores, Includes, ParseBeams).
+package(Options) ->
+    #options{
+        paths           = Paths,
+        ignores         = Ignores,
+        includes        = Includes,
+        follow_symlinks = FollowSymlinks,
+        parse_beams     = ParseBeams
+    } = Options,
+    atomizer:package(Paths, Ignores, Includes, FollowSymlinks, ParseBeams).
 
 
 %%% Global dictionary of command line arguments populated at startup

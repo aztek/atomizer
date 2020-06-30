@@ -1,10 +1,11 @@
 -module(atomizer).
 
 -export([
-    package/4,
+    package/5,
     package_paths/1,
     package_ignores/1,
     package_includes/1,
+    package_follow_symlinks/1,
     package_parse_beams/1,
 
     nr_files/1,
@@ -60,20 +61,22 @@
 %%% Packages
 
 -record(package, {
-    paths       = []    :: [file:filename()],
-    ignores     = []    :: [file:filename()],
-    includes    = []    :: [file:filename()],
-    parse_beams = false :: boolean()
+    paths           = []    :: [file:filename()],
+    ignores         = []    :: [file:filename()],
+    includes        = []    :: [file:filename()],
+    follow_symlinks = false :: boolean(),
+    parse_beams     = false :: boolean()
 }).
 -opaque package() :: #package{}.
 
--spec package([file:filename()], [file:filename()], [file:filename()], boolean()) -> package().
-package(Paths, Ignores, Includes, ParseBeams) ->
+-spec package([file:filename()], [file:filename()], [file:filename()], boolean(), boolean()) -> package().
+package(Paths, Ignores, Includes, FollowSymlinks, ParseBeams) ->
     #package{
-        paths       = Paths,
-        ignores     = Ignores,
-        includes    = Includes,
-        parse_beams = ParseBeams
+        paths           = Paths,
+        ignores         = Ignores,
+        includes        = Includes,
+        follow_symlinks = FollowSymlinks,
+        parse_beams     = ParseBeams
     }.
 
 -spec package_paths(package()) -> [file:filename()].
@@ -84,6 +87,9 @@ package_ignores(#package{ignores = Ignores}) -> Ignores.
 
 -spec package_includes(package()) -> [file:filename()].
 package_includes(#package{includes = Includes}) -> Includes.
+
+-spec package_follow_symlinks(package()) -> boolean().
+package_follow_symlinks(#package{follow_symlinks = FollowSymlinks}) -> FollowSymlinks.
 
 -spec package_parse_beams(package()) -> boolean().
 package_parse_beams(#package{parse_beams = ParseBeams}) -> ParseBeams.

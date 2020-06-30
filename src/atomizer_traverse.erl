@@ -31,25 +31,24 @@ traverse(Pid, Source, Package) ->
 
 -spec read_source(pid(), atomizer:source(), atomizer:package()) -> ok | {error, {module(), term()}}.
 read_source(Pid, Source, Package) ->
-    IgnorePaths  = atomizer:package_ignores(Package),
     IncludePaths = atomizer:package_includes(Package),
     case Source of
         {erl,  File} -> atomizer_parse:parse_erl(Pid, File, IncludePaths);
         {beam, File} -> atomizer_parse:parse_beam(Pid, File);
         {dir,  Dir}  ->
             case file:list_dir(Dir) of
-                {ok, Names}    -> traverse_paths(Pid, IgnorePaths, [filename:join(Dir, Name) || Name <- Names]);
+                {ok, Names}    -> traverse_paths(Pid, Package, [filename:join(Dir, Name) || Name <- Names]);
                 {error, Error} -> {error, {?MODULE, {Dir, {file, Error}}}}
             end
     end.
 
--spec traverse_paths(pid(), [file:filename()], [file:filename()]) -> any().
-traverse_paths(Pid, IgnorePaths, Paths) ->
-    lists:foreach(fun (Path) -> traverse_path(Pid, IgnorePaths, Path) end, Paths).
+-spec traverse_paths(pid(), atomizer:package(), [file:filename()]) -> any().
+traverse_paths(Pid, Package, Paths) ->
+    lists:foreach(fun (Path) -> traverse_path(Pid, Package, Path) end, Paths).
 
--spec traverse_path(pid(), [file:filename()], file:filename()) -> ignore | {add_source, atomizer:source()} | {error, error()}.
-traverse_path(Pid, IgnorePaths, Path) ->
-    case detect_source(Path, IgnorePaths) of
+-spec traverse_path(pid(), atomizer:package(), file:filename()) -> ignore | {add_source, atomizer:source()} | {error, error()}.
+traverse_path(Pid, Package, Path) ->
+    case detect_source(Path, Package) of
         {ok, Source} -> Pid ! {add_source, Source};
         ignore -> ignore;
         {error, {Module, Error}} ->
@@ -62,12 +61,12 @@ traverse_path(Pid, IgnorePaths, Path) ->
             end
     end.
 
--spec detect_source(file:filename(), [file:filename()]) -> {ok, atomizer:source()} | ignore | {error, {?MODULE, error()}}.
-detect_source(Path, PackageIgnorePaths) ->
-    case resolve_real_path(Path) of
+-spec detect_source(file:filename(), atomizer:package()) -> {ok, atomizer:source()} | ignore | {error, {?MODULE, error()}}.
+detect_source(Path, Package) ->
+    case resolve_real_path(Path, Package) of
         {ok, RealPath} ->
             Basename    = filename:basename(RealPath),
-            IgnorePaths = atomizer:global_ignores() ++ PackageIgnorePaths,
+            IgnorePaths = atomizer:global_ignores() ++ atomizer:package_ignores(Package),
             case lists:member(Basename, IgnorePaths) of
                 true  -> ignore;
                 false ->
@@ -88,18 +87,25 @@ detect_source(Path, PackageIgnorePaths) ->
                     end
             end;
 
+        ignore -> ignore;
+
         {error, Error} ->
             {error, {?MODULE, Error}}
     end.
 
--spec resolve_real_path(file:filename()) -> {ok, file:filename()} | {error, error()}.
-resolve_real_path(Path) -> resolve_real_path(Path, ?MAX_LEVEL_SYMLINKS).
+-spec resolve_real_path(file:filename(), atomizer:package()) ->
+    {ok, file:filename()} | ignore | {error, error()}.
+resolve_real_path(Path, Package) -> resolve_real_path(Path, Package, ?MAX_LEVEL_SYMLINKS).
 
--spec resolve_real_path(file:filename() | symlink(), Fuel :: non_neg_integer()) -> {ok, file:filename()} | {error, error()}.
-resolve_real_path(Path, 0) -> {error, {Path, {file, eloop}}};
-resolve_real_path(Path, Fuel) ->
+-spec resolve_real_path(file:filename() | symlink(), atomizer:package(), Fuel :: non_neg_integer()) ->
+    {ok, file:filename()} | ignore | {error, error()}.
+resolve_real_path(Path, Package, 0) -> {error, {Path, {file, eloop}}};
+resolve_real_path(Path, Package, Fuel) ->
+    FollowSymlinks = atomizer:package_follow_symlinks(Package),
     {Source, Destination} = case Path of {_, _} -> Path; _ -> {Path, Path} end,
     case file:read_link_all(Destination) of
+        {ok, _} when not FollowSymlinks -> ignore;
+
         {ok, SymlinkPath} ->
             AbsoluteSymlinkPath =
                 case filename:pathtype(SymlinkPath) of
@@ -108,7 +114,7 @@ resolve_real_path(Path, Fuel) ->
                end,
             case normalize_path(AbsoluteSymlinkPath) of
                 Destination -> {error, {Path, {file, eloop}}};
-                RealPath -> resolve_real_path({Source, RealPath}, Fuel - 1)
+                RealPath -> resolve_real_path({Source, RealPath}, Package, Fuel - 1)
             end;
 
         {error, enoent} ->
