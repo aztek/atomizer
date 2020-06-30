@@ -175,9 +175,9 @@ show_difference_helper([], _) -> [];
 show_difference_helper([K | Loose], [C | Lookalike]) ->
     if
         K == C -> [K | show_difference_helper(Loose, Lookalike)];
-        K == $_; K == $- -> [atomizer_output:bg_green([K]) | show_difference_helper(Loose, [C | Lookalike])];
+        K == $_; K == $- -> [atomizer_output:green([K]) | show_difference_helper(Loose, [C | Lookalike])];
         C == $_; C == $- -> show_difference_helper([K | Loose], Lookalike);
-        true -> [atomizer_output:bg_yellow([K]) | show_difference_helper(Loose, Lookalike)]
+        true -> [atomizer_output:yellow([K]) | show_difference_helper(Loose, Lookalike)]
     end.
 
 -spec show_loose_atom(atomizer:loose_atom()) -> ok.
