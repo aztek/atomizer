@@ -2,6 +2,7 @@
 
 -include_lib("kernel/include/file.hrl").
 
+-define(OPEN_DIR_LIMIT, 4).
 -define(OPEN_FILE_LIMIT, 4).
 
 -export([
@@ -9,25 +10,39 @@
     format_error/1
 ]).
 
--spec collect(pid(), atomizer:package()) -> {ok, non_neg_integer(), non_neg_integer()} | {error, {?MODULE, term()}}.
+-spec collect(pid(), atomizer:package()) ->
+    {done_atoms, NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()} | {error, {?MODULE, term()}}.
 collect(Pid, Package) ->
     case collect_paths(Pid, Package) of
         {ok, NrFiles, NrDirs} -> Pid ! {done_atoms, NrFiles, NrDirs};
         {error, Error} -> Pid ! {error, {?MODULE, Error}}
     end.
 
--spec collect_paths(pid(), atomizer:package()) -> {ok, non_neg_integer(), non_neg_integer()} | {error, term()}.
+-spec collect_paths(pid(), atomizer:package()) ->
+    {ok, NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()} | {error, term()}.
 collect_paths(Pid, Package) ->
     case collect_sources(Package) of
         {ok, Sources} ->
-            Collection = ets:new(collection, [private, set]),
-            Pool = ets:new(pool, [private, set]),
-            Queue = ets:new(queue, [private, ordered_set]),
-            ets:insert(Queue, [{Source} || Source <- Sources]),
-            Result = loop(Pid, Collection, Pool, Queue, Package),
-            ets:delete(Queue),
+            Pool  = ets:new(pool,  [private, set]),
+            Files = ets:new(files, [private, set]),
+            Dirs  = ets:new(dirs,  [private, set]),
+            lists:foreach(fun (Source) ->
+                              Queue = case Source of {dir, _} -> Dirs; _ -> Files end,
+                              ets:insert(Queue, {Source})
+                          end, Sources),
+            Result = case loop_dirs(_NrDirs = 0, Pool, Dirs, Files, Package) of
+                         {ok, NrDirs} ->
+                             NrFiles = ets:info(Files, size),
+                             atomizer_progress:next(NrFiles),
+                             case loop_files(Pid, Pool, Files, Package) of
+                                 ok -> {ok, NrFiles, NrDirs};
+                                 {error, Error} -> {error, Error}
+                             end;
+                         {error, Error} -> {error, Error}
+                     end,
+            ets:delete(Dirs),
+            ets:delete(Files),
             ets:delete(Pool),
-            ets:delete(Collection),
             Result;
         {error, Error} -> {error, Error}
     end.
@@ -38,10 +53,7 @@ collect_sources(Package) ->
                   (Path, {ok, Sources}) ->
                       case atomizer_traverse:detect_source(Path, Package) of
                           {ok, Source} ->
-                              case Source of
-                                  {dir, _} -> ok;
-                                  _ -> atomizer_progress:increase_total(1)
-                              end,
+                              atomizer_progress:tick("Collecting files and directories (~p)"),
                               {ok, [Source | Sources]};
                           ignore -> {ok, Sources};
                           {error, Error} ->
@@ -56,64 +68,71 @@ collect_sources(Package) ->
               end,
     lists:foldl(Collect, {ok, []}, atomizer:package_paths(Package)).
 
--spec loop(pid(), ets:tid(), ets:tid(), ets:tid(), atomizer:package()) ->
-    {ok, NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()} | {error, term()}.
-loop(Pid, Collection, Pool, Queue, Package) ->
-    case {ets:info(Pool, size), ets:info(Queue, size)} of
-        {0, 0} ->
-            {NrFiles, NrDirs} = collected_statistics(Collection),
-            {ok, NrFiles, NrDirs};
+-spec loop_dirs(non_neg_integer(), ets:tid(), ets:tid(), ets:tid(), atomizer:package()) ->
+    {ok, NrDirs :: non_neg_integer()} | {error, term()}.
+loop_dirs(NrDirs, Pool, Dirs, Files, Package) ->
+    case {ets:info(Pool, size), ets:info(Dirs, size)} of
+        {0, 0} -> {ok, NrDirs};
 
-        {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_FILE_LIMIT, QueueSize > 0 ->
-            Source = ets:first(Queue),
-            ets:delete(Queue, Source),
+        {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_DIR_LIMIT, QueueSize > 0 ->
+            Source = ets:first(Dirs),
+            ets:delete(Dirs, Source),
             spawn_link(atomizer_traverse, traverse, [self(), Source, Package]),
             ets:insert(Pool, {Source}),
-            loop(Pid, Collection, Pool, Queue, Package);
+            loop_dirs(NrDirs, Pool, Dirs, Files, Package);
 
         _ ->
             receive
-                {add_source, Source = {Type, _}} ->
+                {add_source, Source} ->
                     SkipSource = ets:member(Pool, Source) orelse
-                                 ets:member(Collection, Source) orelse
-                                 ets:member(Queue, Source),
+                                 ets:member(Dirs, Source) orelse
+                                 ets:member(Files, Source),
                     case SkipSource of
                         true -> ok;
                         false ->
-                            ets:insert(Queue, {Source}),
-                            case Source of
-                                {dir, _} -> ok;
-                                _ -> atomizer_progress:increase_total(1)
-                            end
+                            atomizer_progress:tick("Collecting files and directories (~p)"),
+                            Queue = case Source of {dir, _} -> Dirs; _ -> Files end,
+                            ets:insert(Queue, {Source})
                     end,
-                    loop(Pid, Collection, Pool, Queue, Package);
-
-                {atom, Atom, File, Location} ->
-                    Pid ! {atom, Atom, File, Location},
-                    loop(Pid, Collection, Pool, Queue, Package);
+                    loop_dirs(NrDirs, Pool, Dirs, Files, Package);
 
                 {done_source, Source} ->
-                    case Source of
-                        {dir, _} -> ok;
-                        _ -> atomizer_progress:increase_elapsed(1)
-                    end,
-                    ets:insert(Collection, {Source}),
                     ets:delete(Pool, Source),
-                    loop(Pid, Collection, Pool, Queue, Package);
+                    loop_dirs(NrDirs + 1, Pool, Dirs, Files, Package);
 
                 {error, Error} ->
                     {error, Error}
             end
     end.
 
--spec collected_statistics(ets:tid()) -> {NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()}.
-collected_statistics(Collection) ->
-    ets:foldl(fun ({Source}, {NrFiles, NrDirs}) ->
-                   case Source of
-                       {dir, _} -> {NrFiles, NrDirs + 1};
-                       _        -> {NrFiles + 1, NrDirs}
-                   end
-               end, {0, 0}, Collection).
+-spec loop_files(pid(), ets:tid(), ets:tid(), atomizer:package()) ->
+    {ok, NrFiles :: non_neg_integer()} | {error, term()}.
+loop_files(Pid, Pool, Files, Package) ->
+    case {ets:info(Pool, size), ets:info(Files, size)} of
+        {0, 0} -> ok;
+
+        {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_FILE_LIMIT, QueueSize > 0 ->
+            Source = ets:first(Files),
+            ets:delete(Files, Source),
+            spawn_link(atomizer_traverse, traverse, [self(), Source, Package]),
+            ets:insert(Pool, {Source}),
+            loop_files(Pid, Pool, Files, Package);
+
+        _ ->
+            receive
+                {atom, Atom, File, Location} ->
+                    Pid ! {atom, Atom, File, Location},
+                    loop_files(Pid, Pool, Files, Package);
+
+                {done_source, Source} ->
+                    atomizer_progress:progress(1),
+                    ets:delete(Pool, Source),
+                    loop_files(Pid, Pool, Files, Package);
+
+                {error, Error} ->
+                    {error, Error}
+            end
+    end.
 
 -spec format_error({module(), term()}) -> io_lib:chars().
 format_error({Module, Error}) ->
