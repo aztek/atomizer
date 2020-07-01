@@ -155,12 +155,12 @@ show_statistics(Stats) ->
 pretty_quantity(Amount, Singular, Plural) ->
     [atomizer_output:bold(integer_to_list(Amount)), " ", atomizer:plural(Amount, Singular, Plural)].
 
--spec show_atom(atomizer:atom_info()) -> {ok, exit_code()}.
+-spec show_atom(atomizer:atom_info()) -> ok.
 show_atom({Atom, Locations}) ->
     atomizer:print(atomizer_output:bold(atomizer:pretty_atom(Atom))),
     show_locations(Locations).
 
--spec show_atom(atomizer:atom_info(), atom()) -> {ok, exit_code()}.
+-spec show_atom(atomizer:atom_info(), atom()) -> ok.
 show_atom({Atom, Locations}, Lookalike) ->
     atomizer:print(atomizer_output:bold(show_difference(Atom, Lookalike))),
     show_locations(Locations).

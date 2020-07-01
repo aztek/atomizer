@@ -33,6 +33,7 @@
 ]).
 
 -export_type([
+    file/0,
     source/0,
     atoms/0,
     location/0,
