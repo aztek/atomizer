@@ -106,7 +106,7 @@ halt(ExitCode) ->
 
 -spec redraw_progress_bar(io_lib:chars(), io_lib:chars()) -> ok.
 redraw_progress_bar(LastShownProgressBar, ProgressBar) ->
-    Eraser = lists:duplicate(length(LastShownProgressBar), "\b"),
+    Eraser = lists:duplicate(lists:flatlength(LastShownProgressBar), "\b"),
     draw_progress_bar([Eraser, ProgressBar]).
 
 -spec erase_progress_bar(io_lib:chars()) -> ok.
