@@ -46,9 +46,8 @@
     statistics/0
 ]).
 
--type source()      :: {erl,  file:filename()}
-                     | {beam, file:filename()}
-                     | {dir,  file:filename()}.
+-type file()        :: {erl | beam, file:filename()}.
+-type source()      :: {dir, file:filename()} | file().
 
 -type atoms()       :: #{atom() => locations()}.
 -type lookalikes()  :: sets:set({atom(), atom()}).

@@ -1,12 +1,19 @@
 -module(atomizer_parse).
 
 -export([
-    parse_erl/3,
-    parse_beam/2,
+    parse/3,
     format_error/1
 ]).
 
 -type error() :: {file:filename() | atomizer:location(), no_abstract_code | {module(), atom()}}.
+
+-spec parse(pid(), atomizer:file(), atomizer:package()) -> ok | {error, {?MODULE, error()}}.
+parse(Pid, File, Package) ->
+    IncludePaths = atomizer:package_includes(Package),
+    case File of
+        {erl,  Path} -> parse_erl(Pid, Path, IncludePaths);
+        {beam, Path} -> parse_beam(Pid, Path)
+    end.
 
 -spec parse_erl(pid(), file:filename(), [file:filename()]) -> ok | {error, {?MODULE, error()}}.
 parse_erl(Pid, Path, IncludePaths) ->

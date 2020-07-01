@@ -31,15 +31,14 @@ traverse(Pid, Source, Package) ->
 
 -spec read_source(pid(), atomizer:source(), atomizer:package()) -> ok | {error, {module(), term()}}.
 read_source(Pid, Source, Package) ->
-    IncludePaths = atomizer:package_includes(Package),
     case Source of
-        {erl,  File} -> atomizer_parse:parse_erl(Pid, File, IncludePaths);
-        {beam, File} -> atomizer_parse:parse_beam(Pid, File);
-        {dir,  Dir}  ->
+        {dir, Dir}  ->
             case file:list_dir(Dir) of
                 {ok, Names} -> traverse_paths(Pid, Package, [filename:join(Dir, Name) || Name <- Names]);
                 {error, Error} -> {error, {?MODULE, {Dir, {file, Error}}}}
-            end
+            end;
+
+        _ -> atomizer_parse:parse(Pid, Source, Package)
     end.
 
 -spec traverse_paths(pid(), atomizer:package(), [file:filename()]) -> any().
