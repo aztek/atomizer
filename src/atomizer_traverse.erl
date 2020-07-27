@@ -15,37 +15,28 @@
 -type symlink() :: {Source :: file:filename(), Destination :: file:filename()}.
 -type error()   :: {file:filename() | symlink(), {module(), atom()}}.
 
--spec traverse(pid(), atomizer:source(), atomizer:package()) -> {done_source, atomizer:source()} | {error, {module(), term()}}.
-traverse(Pid, Source, Package) ->
-    case read_source(Pid, Source, Package) of
-        ok -> Pid ! {done_source, Source};
-        {error, {Module, Error}} ->
+-spec traverse(pid(), atomizer:package(), file:filename()) ->
+    {done_dir, file:filename()} | {error, {?MODULE, term()}}.
+traverse(Pid, Package, Dir) ->
+    case file:list_dir(Dir) of
+        {ok, Paths} ->
+            lists:foreach(fun (Path) -> traverse_path(Pid, Package, filename:join(Dir, Path)) end, Paths),
+            {done_dir, Dir};
+
+        {error, Error} ->
+            ExtendedError = {Dir, {file, Error}},
             case atomizer_cli_options:get_warn_errors() of
                 true ->
-                    atomizer:warning(Module:format_error(Error)),
-                    Pid ! {done_source, Source};
+                    atomizer:warning(format_error(ExtendedError)),
+                    {done_dir, Dir};
+
                 false ->
-                    Pid ! {error, {Module, Error}}
+                    {error, {?MODULE, ExtendedError}}
             end
     end.
 
--spec read_source(pid(), atomizer:source(), atomizer:package()) -> ok | {error, {module(), term()}}.
-read_source(Pid, Source, Package) ->
-    case Source of
-        {dir, Dir}  ->
-            case file:list_dir(Dir) of
-                {ok, Names} -> traverse_paths(Pid, Package, [filename:join(Dir, Name) || Name <- Names]);
-                {error, Error} -> {error, {?MODULE, {Dir, {file, Error}}}}
-            end;
-
-        _ -> atomizer_parse:parse(Pid, Source, Package)
-    end.
-
--spec traverse_paths(pid(), atomizer:package(), [file:filename()]) -> any().
-traverse_paths(Pid, Package, Paths) ->
-    lists:foreach(fun (Path) -> traverse_path(Pid, Package, Path) end, Paths).
-
--spec traverse_path(pid(), atomizer:package(), file:filename()) -> ignore | {add_source, atomizer:source()} | {error, error()}.
+-spec traverse_path(pid(), atomizer:package(), file:filename()) ->
+    ignore | {add_source, atomizer:source()} | {error, error()}.
 traverse_path(Pid, Package, Path) ->
     case detect_source(Path, Package) of
         {ok, Source} -> Pid ! {add_source, Source};
@@ -60,7 +51,8 @@ traverse_path(Pid, Package, Path) ->
             end
     end.
 
--spec detect_source(file:filename(), atomizer:package()) -> {ok, atomizer:source()} | ignore | {error, {?MODULE, error()}}.
+-spec detect_source(file:filename(), atomizer:package()) ->
+    {ok, atomizer:source()} | ignore | {error, {?MODULE, error()}}.
 detect_source(Path, Package) ->
     case resolve_real_path(Path, Package) of
         {ok, RealPath} ->
@@ -76,14 +68,15 @@ detect_source(Path, Package) ->
                             IsBeam     = is_beam(RealPath),
                             ParseBeams = atomizer:package_parse_beams(Package),
                             case Type of
-                                directory -> {ok, {dir,  RealPath}};
-                                regular when IsErlang -> {ok, {erl,  RealPath}};
+                                directory -> {ok, {dir, RealPath}};
+                                regular when IsErlang -> {ok, {erl, RealPath}};
                                 regular when IsBeam, ParseBeams -> {ok, {beam, RealPath}};
                                 _ -> ignore
                             end;
 
                         {error, Error} ->
-                            {error, {?MODULE, {{Path, RealPath}, {file, Error}}}}
+                            ExtendedError = {{Path, RealPath}, {file, Error}},
+                            {error, {?MODULE, ExtendedError}}
                     end
             end;
 

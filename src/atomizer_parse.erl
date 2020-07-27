@@ -7,8 +7,23 @@
 
 -type error() :: {file:filename() | atomizer:location(), no_abstract_code | {module(), atom()}}.
 
--spec parse(pid(), atomizer:file(), atomizer:package()) -> ok | {error, {?MODULE, error()}}.
-parse(Pid, File, Package) ->
+-spec parse(pid(), atomizer:package(), atomizer:file()) ->
+    {done_file, atomizer:file()} | {error, {?MODULE, error()}}.
+parse(Pid, Package, File) ->
+    case parse_file(Pid, File, Package) of
+        ok -> {done_file, File};
+        {error, {Module, Error}} ->
+            case atomizer_cli_options:get_warn_errors() of
+                true ->
+                    atomizer:warning(Module:format_error(Error)),
+                    {done_file, File};
+                false ->
+                    {error, {Module, Error}}
+            end
+    end.
+
+-spec parse_file(pid(), atomizer:file(), atomizer:package()) -> ok | {error, {?MODULE, error()}}.
+parse_file(Pid, File, Package) ->
     IncludePaths = atomizer:package_includes(Package),
     case File of
         {erl,  Path} -> parse_erl(Pid, Path, IncludePaths);
