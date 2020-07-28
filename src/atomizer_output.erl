@@ -111,7 +111,7 @@ redraw_progress_bar(LastShownProgressBar, ProgressBar) ->
 
 -spec erase_progress_bar(io_lib:chars()) -> ok.
 erase_progress_bar(LastShownProgressBar) ->
-    draw_progress_bar(lists:duplicate(length(LastShownProgressBar), "\b \b")).
+    draw_progress_bar(lists:duplicate(lists:flatlength(LastShownProgressBar), "\b \b")).
 
 
 %%% Colored ASCII output
