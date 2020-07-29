@@ -3,7 +3,7 @@
 -export([
     start/0,
     tick/1,
-    next/1,
+    next/2,
     progress/1,
     finish/0
 ]).
@@ -41,8 +41,8 @@ loop_spinner(Ticks, LastPhase, LastTicked) ->
                     loop_spinner(Ticks + 1, LastPhase, LastTicked)
             end;
 
-        {next, Total} ->
-            loop_progress_bar(Total, 0, 0);
+        {next, Elapsed, Total} ->
+            loop_progress_bar(Total, Elapsed, _LastShownProgress = 0);
 
         stop ->
             atomizer_output:hide_progress(),
@@ -54,7 +54,10 @@ loop_progress_bar(Total, Elapsed, LastShownProgress) ->
     receive
         {progress, Delta} ->
             IncreasedElapsed = Elapsed + Delta,
-            IncreasedProgress = erlang:floor(100 * IncreasedElapsed / Total),
+            IncreasedProgress = case Total of
+                                    0 -> 100;
+                                    _ -> erlang:floor(100 * IncreasedElapsed / Total)
+                                end,
             Progress = erlang:min(100, IncreasedProgress),
             case Progress > LastShownProgress of
                 true ->
@@ -75,9 +78,9 @@ tick(Format) ->
     ?PROCESS_NAME ! {tick, Format},
     ok.
 
--spec next(non_neg_integer()) -> ok.
-next(Total) ->
-    ?PROCESS_NAME ! {next, Total},
+-spec next(non_neg_integer(), non_neg_integer()) -> ok.
+next(Elapsed, Total) ->
+    ?PROCESS_NAME ! {next, Elapsed, Total},
     ok.
 
 -spec progress(non_neg_integer()) -> ok.

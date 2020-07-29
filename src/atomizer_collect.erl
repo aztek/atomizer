@@ -28,9 +28,9 @@ collect_paths(Pid, Package) ->
             lists:foreach(fun ({dir, Dir}) -> ets:insert(Dirs, {Dir});
                               (File) -> ets:insert(Files, {File})
                           end, Sources),
-            Result = case loop_dirs(_NrDirs = 0, _NrFiles = 0, Pool, Dirs, Files, Package) of
-                         {ok, NrDirs, NrFiles} ->
-                             atomizer_progress:next(NrFiles),
+            Result = case loop_dirs(_NrFiles = 0, _NrDirs = 0, Pool, Dirs, Files, Package) of
+                         {ok, NrFiles, NrDirs} ->
+                             atomizer_progress:next(_Elapsed = 0, NrFiles),
                              case loop_files(Pid, Pool, Files, Package) of
                                  ok -> {ok, NrFiles, NrDirs};
                                  {error, Error} -> {error, Error}
@@ -65,11 +65,11 @@ collect_sources(Package) ->
               end,
     lists:foldl(Collect, {ok, []}, atomizer:package_paths(Package)).
 
--spec loop_dirs(NrDirs, NrFiles, ets:tid(), ets:tid(), ets:tid(), atomizer:package()) ->
-    {ok, NrDirs, NrFiles} | {error, atomizer:error()} when
+-spec loop_dirs(NrFiles, NrDirs, ets:tid(), ets:tid(), ets:tid(), atomizer:package()) ->
+    {ok, NrFiles, NrDirs} | {error, atomizer:error()} when
     NrDirs  :: non_neg_integer(),
     NrFiles :: non_neg_integer().
-loop_dirs(NrDirs, NrFiles, Pool, Dirs, Files, Package) ->
+loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package) ->
     case {ets:info(Pool, size), ets:info(Dirs, size)} of
         {0, 0} -> {ok, NrFiles, NrDirs};
 
@@ -79,7 +79,7 @@ loop_dirs(NrDirs, NrFiles, Pool, Dirs, Files, Package) ->
             Self = self(),
             spawn_link(fun () -> Self ! atomizer_traverse:traverse(Self, Package, Dir) end),
             ets:insert(Pool, {Dir}),
-            loop_dirs(NrDirs, NrFiles, Pool, Dirs, Files, Package);
+            loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package);
 
         _ ->
             receive
@@ -90,22 +90,21 @@ loop_dirs(NrDirs, NrFiles, Pool, Dirs, Files, Package) ->
                     case SkipSource of
                         true -> ok;
                         false ->
+                            atomizer_progress:tick("Collecting files and directories (~p)"),
                             case Source of
-                                {dir, Dir} -> ets:insert(Dirs, {Dir});
-                                File -> ets:insert(Files, {File})
+                                {dir, Dir} ->
+                                    ets:insert(Dirs, {Dir}),
+                                    loop_dirs(NrFiles, NrDirs + 1, Pool, Dirs, Files, Package);
+
+                                File ->
+                                    ets:insert(Files, {File}),
+                                    loop_dirs(NrFiles + 1, NrDirs, Pool, Dirs, Files, Package)
                             end
-                    end,
-                    loop_dirs(NrDirs, NrFiles, Pool, Dirs, Files, Package);
+                    end;
 
                 {done_dir, Dir} ->
-                    atomizer_progress:tick("Collecting files and directories (~p)"),
                     ets:delete(Pool, Dir),
-                    loop_dirs(NrDirs + 1, NrFiles, Pool, Dirs, Files, Package);
-
-                {done_file, File} ->
-                    atomizer_progress:tick("Collecting files and directories (~p)"),
-                    ets:delete(Pool, File),
-                    loop_dirs(NrDirs, NrFiles + 1, Pool, Dirs, Files, Package);
+                    loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package);
 
                 {error, Error} ->
                     {error, Error}
@@ -121,16 +120,12 @@ loop_files(Pid, Pool, Files, Package) ->
             File = ets:first(Files),
             ets:delete(Files, File),
             Self = self(),
-            spawn_link(fun () -> Self ! atomizer_parse:parse(Self, Package, File) end),
+            spawn_link(fun () -> Self ! atomizer_parse:parse(Pid, Package, File) end),
             ets:insert(Pool, {File}),
             loop_files(Pid, Pool, Files, Package);
 
         _ ->
             receive
-                {atom, Atom, File, Location} ->
-                    Pid ! {atom, Atom, File, Location},
-                    loop_files(Pid, Pool, Files, Package);
-
                 {done_file, File} ->
                     atomizer_progress:progress(1),
                     ets:delete(Pool, File),
