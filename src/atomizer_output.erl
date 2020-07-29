@@ -5,7 +5,7 @@
     put_chars/2,
     set_progress/1,
     hide_progress/0,
-    halt/1,
+    stop/0,
 
     red/1,
     yellow/1,
@@ -34,7 +34,7 @@
 start(Parent) ->
     register(?PROCESS_NAME, spawn(fun () -> Parent ! loop() end)).
 
--spec loop() -> {halt, ExitCode :: integer()}.
+-spec loop() -> ok.
 loop() ->
     receive
         {output, IoDevice, Message} ->
@@ -48,8 +48,8 @@ loop() ->
         hide_progress ->
             loop();
 
-        {halt, ExitCode} ->
-            {halt, ExitCode}
+        stop ->
+            ok
     end.
 
 -spec loop_progress(string()) -> {halt, ExitCode :: integer()}.
@@ -72,9 +72,9 @@ loop_progress(LastShownProgressBar) ->
             erase_progress_bar(LastShownProgressBar),
             loop();
 
-        {halt, ExitCode} ->
+        stop ->
             erase_progress_bar(LastShownProgressBar),
-            {halt, ExitCode}
+            ok
     end.
 
 -spec put_chars(io:device(), io_lib:chars()) -> ok.
@@ -99,9 +99,9 @@ hide_progress() ->
 draw_progress_bar(ProgressBar) ->
     io:put_chars(?PROGRESS_BAR_DEVICE, [?HIDE_CURSOR, ProgressBar, ?SHOW_CURSOR]).
 
--spec halt(non_neg_integer()) -> ok.
-halt(ExitCode) ->
-    ?PROCESS_NAME ! {halt, ExitCode},
+-spec stop() -> ok.
+stop() ->
+    ?PROCESS_NAME ! stop,
     ok.
 
 -spec redraw_progress_bar(io_lib:chars(), io_lib:chars()) -> ok.

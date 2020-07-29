@@ -8,9 +8,9 @@
 main(CmdArgs) ->
     atomizer_output:start(_Parent = self()),
     ExitCode = cli(CmdArgs),
-    atomizer_output:halt(ExitCode),
+    atomizer_output:stop(),
     receive
-        {halt, ExitCode} -> erlang:halt(ExitCode)
+        ok -> erlang:halt(ExitCode)
     end.
 
 -type exit_code() :: non_neg_integer().
