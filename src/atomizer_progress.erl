@@ -54,7 +54,8 @@ loop_progress_bar(Total, Elapsed, LastShownProgress) ->
     receive
         {progress, Delta} ->
             IncreasedElapsed = Elapsed + Delta,
-            Progress = erlang:max(100, erlang:floor(100 * IncreasedElapsed / Total)),
+            IncreasedProgress = erlang:floor(100 * IncreasedElapsed / Total),
+            Progress = erlang:min(100, IncreasedProgress),
             case Progress > LastShownProgress of
                 true ->
                     atomizer_output:set_progress(render_progress_bar(Progress)),
