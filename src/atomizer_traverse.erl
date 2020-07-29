@@ -12,11 +12,15 @@
     format_error/1
 ]).
 
+-export_type([
+    error/0
+]).
+
 -type symlink() :: {Source :: file:filename(), Destination :: file:filename()}.
--type error()   :: {file:filename() | symlink(), {module(), atom()}}.
+-type error()   :: {file:filename() | symlink(), atomizer:error()}.
 
 -spec traverse(pid(), atomizer:package(), file:filename()) ->
-    {done_dir, file:filename()} | {error, {?MODULE, term()}}.
+    {done_dir, file:filename()} | {error, atomizer:error()}.
 traverse(Pid, Package, Dir) ->
     case file:list_dir(Dir) of
         {ok, Paths} ->
@@ -24,14 +28,14 @@ traverse(Pid, Package, Dir) ->
             {done_dir, Dir};
 
         {error, Error} ->
-            ExtendedError = {Dir, {file, Error}},
+            ExtendedError = {?MODULE, {Dir, {file, Error}}},
             case atomizer_cli_options:get_warn_errors() of
                 true ->
-                    atomizer:warning(format_error(ExtendedError)),
+                    atomizer:warning(ExtendedError),
                     {done_dir, Dir};
 
                 false ->
-                    {error, {?MODULE, ExtendedError}}
+                    {error, ExtendedError}
             end
     end.
 
@@ -41,13 +45,13 @@ traverse_path(Pid, Package, Path) ->
     case detect_source(Path, Package) of
         {ok, Source} -> Pid ! {add_source, Source};
         ignore -> ignore;
-        {error, {Module, Error}} ->
+        {error, Error} ->
             case atomizer_cli_options:get_warn_errors() of
                 true ->
-                    atomizer:warning(Module:format_error(Error)),
+                    atomizer:warning(Error),
                     ignore;
                 false ->
-                    {error, {Module, Error}}
+                    {error, Error}
             end
     end.
 
@@ -140,7 +144,7 @@ is_beam(FileName) ->
     lists:any(fun (Ext) -> lists:suffix(Ext, FileName) end, ?BEAM_EXTENSIONS).
 
 -spec format_error(error()) -> io_lib:chars().
-format_error({{SymlinkSrc, SymlinkDst}, {Module, Error}}) ->
-    atomizer:words(["Failed to read symlink", SymlinkSrc, "->", [SymlinkDst, ":"], Module:format_error(Error)]);
-format_error({Path, {Module, Error}}) ->
-    atomizer:words(["Failed to read", [Path, ":"], Module:format_error(Error)]).
+format_error({{SymlinkSrc, SymlinkDst}, Error}) ->
+    atomizer:words(["Failed to read symlink", SymlinkSrc, "->", [SymlinkDst, ":"], atomizer:format_error(Error)]);
+format_error({Path, Error}) ->
+    atomizer:words(["Failed to read", [Path, ":"], atomizer:format_error(Error)]).

@@ -5,20 +5,25 @@
     format_error/1
 ]).
 
--type error() :: {file:filename() | atomizer:location(), no_abstract_code | {module(), atom()}}.
+-export_type([
+    error/0
+]).
+
+-type error() :: {file:filename() | atomizer:location(), {error | warning, lib_error()}}.
+-type lib_error() :: no_abstract_code | {epp | file | beam_lib, term()}.
 
 -spec parse(pid(), atomizer:package(), atomizer:file()) ->
     {done_file, atomizer:file()} | {error, {?MODULE, error()}}.
 parse(Pid, Package, File) ->
     case parse_file(Pid, File, Package) of
         ok -> {done_file, File};
-        {error, {Module, Error}} ->
+        {error, Error} ->
             case atomizer_cli_options:get_warn_errors() of
                 true ->
-                    atomizer:warning(Module:format_error(Error)),
+                    atomizer:warning(Error),
                     {done_file, File};
                 false ->
-                    {error, {Module, Error}}
+                    {error, Error}
             end
     end.
 
@@ -57,18 +62,18 @@ parse_epp(Epp) ->
             parse_epp(Epp);
 
         {warning, {Line, Module, Warning}} ->
-            atomizer:warning(atomizer:words(["In", get(filename),
-                                             "line", [atomizer_output:bold(integer_to_list(Line)), ":"],
-                                             Module:format_error(Warning)])),
+            ExtendedWarning = {?MODULE, {{get(filename), Line}, {warning, {Module, Warning}}}},
+            atomizer:warning(ExtendedWarning),
             parse_epp(Epp);
 
         {error, {Line, Module, Error}} ->
+            ExtendedError = {?MODULE, {{get(filename), Line}, {error, {Module, Error}}}},
             case atomizer_cli_options:get_warn_errors() of
                 true ->
-                    atomizer:warning(format_error({{get(filename), Line}, {Module, Error}})),
+                    atomizer:warning(ExtendedError),
                     parse_epp(Epp);
                 false ->
-                    {error, {?MODULE, {{get(filename), Line}, {Module, Error}}}}
+                    {error, ExtendedError}
             end;
 
         {eof, _} -> ok
@@ -81,14 +86,19 @@ parse_beam(Pid, Path) ->
     case beam_lib:chunks(Path, [abstract_code]) of
         {ok, {_, [{abstract_code, AbstractCode}]}} ->
             case AbstractCode of
-                no_abstract_code -> {error, {?MODULE, {Path, no_abstract_code}}};
+                no_abstract_code -> {error, {?MODULE, {Path, {error, no_abstract_code}}}};
                 {_, Forms} -> lists:foreach(fun parse_form/1, Forms)
             end;
-        {error, beam_lib, Error} -> {error, {?MODULE, {Path, {beam_lib, Error}}}}
+        {error, beam_lib, Error} -> {error, {?MODULE, {Path, {error, {beam_lib, Error}}}}}
     end.
 
 -spec format_error(error()) -> io_lib:chars().
-format_error({Location, Reason}) ->
+format_error({Location, {Severity, Reason}}) ->
+    Intro = case Severity of
+                error   -> "Unable to parse";
+                warning -> "In"
+            end,
+
     Filename = case Location of
                    {Path, {Line, Column}} ->
                        atomizer:words([Path, "line",  [atomizer_output:bold(integer_to_list(Line)), ","],
@@ -98,11 +108,13 @@ format_error({Location, Reason}) ->
                    Path ->
                        Path
                end,
+
     Message = case Reason of
                   no_abstract_code -> "file was compiled without the debug_info option";
                   {Module, Error}  -> Module:format_error(Error)
               end,
-    atomizer:words(["Unable to parse", [Filename, ":"], Message]).
+
+    atomizer:words([Intro, [Filename, ":"], Message]).
 
 -spec parse_form(erl_parse:abstract_form() | erl_parse:form_info()) -> ok.
 parse_form(Form) -> case Form of

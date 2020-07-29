@@ -6,20 +6,19 @@
 -define(OPEN_FILE_LIMIT, 4).
 
 -export([
-    collect/2,
-    format_error/1
+    collect/2
 ]).
 
 -spec collect(pid(), atomizer:package()) ->
-    {done_atoms, NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()} | {error, {?MODULE, term()}}.
+    {done_atoms, NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()} | {error, atomizer:error()}.
 collect(Pid, Package) ->
     case collect_paths(Pid, Package) of
         {ok, NrFiles, NrDirs} -> Pid ! {done_atoms, NrFiles, NrDirs};
-        {error, Error} -> Pid ! {error, {?MODULE, Error}}
+        {error, Error} -> Pid ! {error, Error}
     end.
 
 -spec collect_paths(pid(), atomizer:package()) ->
-    {ok, NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()} | {error, term()}.
+    {ok, NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()} | {error, atomizer:error()}.
 collect_paths(Pid, Package) ->
     case collect_sources(Package) of
         {ok, Sources} ->
@@ -45,7 +44,7 @@ collect_paths(Pid, Package) ->
         {error, Error} -> {error, Error}
     end.
 
--spec collect_sources(atomizer:package()) -> {ok, [atomizer:source()]} | {error, term()}.
+-spec collect_sources(atomizer:package()) -> {ok, [atomizer:source()]} | {error, atomizer:error()}.
 collect_sources(Package) ->
     Collect = fun (_, {error, Error}) -> {error, Error};
                   (Path, {ok, Sources}) ->
@@ -57,7 +56,7 @@ collect_sources(Package) ->
                           {error, Error} ->
                               case atomizer_cli_options:get_warn_errors() of
                                   true ->
-                                      atomizer:warning(format_error(Error)),
+                                      atomizer:warning(Error),
                                       {ok, Sources};
                                   false ->
                                       {error, Error}
@@ -67,7 +66,7 @@ collect_sources(Package) ->
     lists:foldl(Collect, {ok, []}, atomizer:package_paths(Package)).
 
 -spec loop_dirs(NrDirs, NrFiles, ets:tid(), ets:tid(), ets:tid(), atomizer:package()) ->
-    {ok, NrDirs, NrFiles} | {error, term()} when
+    {ok, NrDirs, NrFiles} | {error, atomizer:error()} when
     NrDirs  :: non_neg_integer(),
     NrFiles :: non_neg_integer().
 loop_dirs(NrDirs, NrFiles, Pool, Dirs, Files, Package) ->
@@ -113,8 +112,7 @@ loop_dirs(NrDirs, NrFiles, Pool, Dirs, Files, Package) ->
             end
     end.
 
--spec loop_files(pid(), ets:tid(), ets:tid(), atomizer:package()) ->
-    {ok, NrFiles :: non_neg_integer()} | {error, term()}.
+-spec loop_files(pid(), ets:tid(), ets:tid(), atomizer:package()) -> ok | {error, atomizer:error()}.
 loop_files(Pid, Pool, Files, Package) ->
     case {ets:info(Pool, size), ets:info(Files, size)} of
         {0, 0} -> ok;
@@ -142,7 +140,3 @@ loop_files(Pid, Pool, Files, Package) ->
                     {error, Error}
             end
     end.
-
--spec format_error({module(), term()}) -> io_lib:chars().
-format_error({Module, Error}) ->
-    Module:format_error(Error).

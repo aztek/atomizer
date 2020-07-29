@@ -6,13 +6,15 @@
     package/1,
     get_action/0,
     get_verbosity/0,
-    get_warn_errors/0
+    get_warn_errors/0,
+    format_error/1
 ]).
 
 -export_type([
     options/0,
     action/0,
-    verbosity/0
+    verbosity/0,
+    error/0
 ]).
 
 
@@ -36,10 +38,18 @@
 
 %%% Parsing of command line options
 
--spec parse([string()]) -> {options, options()} | {message, string()} | {error, string()}.
-parse(CmdArgs) -> parse(CmdArgs, #options{}).
+-type error() :: {unrecognized_option, string()}
+               | {missing_argument, action | verbosity}
+               | {incorrect_value,  action | verbosity}.
 
--spec parse([string()], options()) -> {options, options()} | {message, string()} | {error, string()}.
+-spec parse([string()]) -> {options, options()} | {message, string()} | {error, atomizer:error()}.
+parse(CmdArgs) ->
+    case parse(CmdArgs, #options{}) of
+        {error, Error} -> {error, {?MODULE, Error}};
+        Other -> Other
+    end.
+
+-spec parse([string()], options()) -> {options, options()} | {message, string()} | {error, error()}.
 parse([], Options) -> {options, Options};
 parse([CmdArg | CmdArgs], Options) ->
     case string:prefix(CmdArg, "-") of
@@ -47,7 +57,7 @@ parse([CmdArg | CmdArgs], Options) ->
         Option  -> parse_option(Option, CmdArgs, Options)
     end.
 
--spec parse_ignores([string()], options()) -> {ok, options()} | {message, string()} | {error, string()}.
+-spec parse_ignores([string()], options()) -> {ok, options()} | {message, string()} | {error, error()}.
 parse_ignores([], Options) -> {options, Options};
 parse_ignores([CmdArg | CmdArgs], Options) ->
     case string:prefix(CmdArg, "-") of
@@ -55,8 +65,7 @@ parse_ignores([CmdArg | CmdArgs], Options) ->
         Option  -> parse_option(Option, CmdArgs, Options)
     end.
 
-
--spec parse_includes([string()], options()) -> {ok, options()} | {message, string()} | {error, string()}.
+-spec parse_includes([string()], options()) -> {ok, options()} | {message, string()} | {error, error()}.
 parse_includes([], Options) -> {options, Options};
 parse_includes([CmdArg | CmdArgs], Options) ->
     case string:prefix(CmdArg, "-") of
@@ -64,14 +73,14 @@ parse_includes([CmdArg | CmdArgs], Options) ->
         Option  -> parse_option(Option, CmdArgs, Options)
     end.
 
--spec parse_option(string(), [string()], options()) -> {ok, options()} | {message, string()} | {error, string()}.
+-spec parse_option(string(), [string()], options()) -> {ok, options()} | {message, string()} | {error, error()}.
 parse_option(Option, CmdArgs, Options) ->
     case Option of
         _Help when Option == "h"; Option == "-help" ->
             {message, usage() ++ "\n" ++ help()};
 
         _Action when Option == "a"; Option == "-action" ->
-            case parse_action(CmdArgs) of
+            case parse_option_action(CmdArgs) of
                 {ok, Action, TailCmdArgs} ->
                     parse(TailCmdArgs, Options#options{action = Action});
 
@@ -95,7 +104,7 @@ parse_option(Option, CmdArgs, Options) ->
             parse(CmdArgs, Options#options{warn_errors = true});
 
         _Verbosity when Option == "v"; Option == "-verbosity" ->
-            case parse_verbosity(CmdArgs) of
+            case parse_option_verbosity(CmdArgs) of
                 {ok, Verbosity, TailCmdArgs} ->
                     parse(TailCmdArgs, Options#options{verbosity = Verbosity});
 
@@ -104,28 +113,36 @@ parse_option(Option, CmdArgs, Options) ->
             end;
 
         _ ->
-            {error, ["Unrecognized option ", atomizer_output:bold(["-", Option]), "."]}
+            {error, {unrecognized_option, Option}}
     end.
 
--spec parse_action([string()]) -> {ok, action(), [string()]} | {error, string()}.
-parse_action([]) -> {error, "Malformed arguments - action is missing."};
-parse_action([CmdArg | CmdArgs]) ->
-    case CmdArg of
-        "list" -> {ok, list, CmdArgs};
-        "show" -> {ok, show, CmdArgs};
-        "warn" -> {ok, warn, CmdArgs};
-        _ -> {error, "Wrong action. Supported values are list, show and warn."}
+-spec parse_option_action([string()]) -> {ok, action(), [string()]} | {error, error()}.
+parse_option_action([]) -> {error, {missing_argument, action}};
+parse_option_action([CmdArg | CmdArgs]) ->
+    case parse_action(CmdArg) of
+        {ok, Action} -> {ok, Action, CmdArgs};
+        nok -> {error, {incorrect_value, action}}
     end.
 
--spec parse_verbosity([string()]) -> {ok, verbosity(), [string()]} | {error, string()}.
-parse_verbosity([]) -> {error, "Malformed arguments - verbosity is missing."};
-parse_verbosity([CmdArg | CmdArgs]) ->
-    case CmdArg of
-        "0" -> {ok, 0, CmdArgs};
-        "1" -> {ok, 1, CmdArgs};
-        "2" -> {ok, 2, CmdArgs};
-        _ -> {error, "Wrong verbosity. Supported values are 0, 1 and 2."}
+-spec parse_action(string()) -> {ok, action()} | nok.
+parse_action("list") -> {ok, list};
+parse_action("show") -> {ok, show};
+parse_action("warn") -> {ok, warn};
+parse_action(_)      -> nok.
+
+-spec parse_option_verbosity([string()]) -> {ok, verbosity(), [string()]} | {error, error()}.
+parse_option_verbosity([]) -> {error, {missing_argument, verbosity}};
+parse_option_verbosity([CmdArg | CmdArgs]) ->
+    case parse_verbosity(CmdArg) of
+        {ok, Verbosity} -> {ok, Verbosity, CmdArgs};
+        nok -> {error, {incorrect_value, verbosity}}
     end.
+
+-spec parse_verbosity(string()) -> {ok, verbosity()} | nok.
+parse_verbosity("0") -> {ok, 0};
+parse_verbosity("1") -> {ok, 1};
+parse_verbosity("2") -> {ok, 2};
+parse_verbosity(_)   -> nok.
 
 usage() ->
     "Usage: atomizer [-a | --action ACTION] [-b | --parse-beams]\n" ++
@@ -182,3 +199,17 @@ get_verbosity() ->
 get_action() ->
     Options = get_options(),
     Options#options.action.
+
+-spec format_error(error()) -> io_lib:chars().
+format_error({unrecognized_option, Option}) ->
+    ["Unrecognized option ", atomizer_output:bold(["-", Option]), "."];
+
+format_error({missing_argument, Option}) ->
+    ["Malformed arguments - ", atom_to_list(Option), "is missing."];
+
+format_error({incorrect_value, Option}) ->
+    SupportedValues = case Option of
+                          action    -> "list, show and warn";
+                          verbosity -> "0, 1 and 2"
+                      end,
+    ["Wrong ", atom_to_list(Option), ". Supported values are ", SupportedValues, "."].

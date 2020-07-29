@@ -2,11 +2,10 @@
 
 -export([
     collect_atoms/1,
-    find_loose_atoms/1,
-    format_error/1
+    find_loose_atoms/1
 ]).
 
--type result(A) :: {ok, [A], atomizer:statistics()} | {error, {?MODULE, term()}}.
+-type result(A) :: {ok, [A], atomizer:statistics()} | {error, atomizer:error()}.
 
 -spec collect_atoms(atomizer:package()) -> result(atomizer:atom_info()).
 collect_atoms(Package) ->
@@ -30,7 +29,7 @@ collect_atoms_loop(Atoms) ->
         {error, Error} ->
             case atomizer_cli_options:get_warn_errors() of
                 true ->
-                    atomizer:warning(format_error(Error)),
+                    atomizer:warning(Error),
                     collect_atoms_loop(Atoms);
                 false ->
                     {error, Error}
@@ -46,7 +45,8 @@ find_loose_atoms(Package) ->
     atomizer_progress:finish(),
     Result.
 
--spec find_loose_atoms_loop(pid(), atomizer:atoms(), atomizer:lookalikes(), {integer(), integer()}) -> result(atomizer:loose_atom()).
+-spec find_loose_atoms_loop(pid(), atomizer:atoms(), atomizer:lookalikes(), {integer(), integer()}) ->
+    result(atomizer:loose_atom()).
 find_loose_atoms_loop(Pid, Atoms, Lookalikes, NrParsed) ->
     receive
         {atom, Atom, File, Position} ->
@@ -74,7 +74,7 @@ find_loose_atoms_loop(Pid, Atoms, Lookalikes, NrParsed) ->
         {error, Error} ->
             case atomizer_cli_options:get_warn_errors() of
                 true ->
-                    atomizer:warning(format_error(Error)),
+                    atomizer:warning(Error),
                     find_loose_atoms_loop(Pid, Atoms, Lookalikes, NrParsed);
                 false ->
                     {error, Error}
@@ -117,7 +117,3 @@ related({_, LocationsA}, {_, LocationsB}) ->
     FilesA = sets:from_list(maps:keys(LocationsA)),
     FilesB = sets:from_list(maps:keys(LocationsB)),
     not sets:is_disjoint(FilesA, FilesB).
-
--spec format_error({module(), term()}) -> io_lib:chars().
-format_error({Module, Error}) ->
-    Module:format_error(Error).

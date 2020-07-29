@@ -19,13 +19,12 @@
     get_nr_files/1,
     get_nr_dirs/1,
 
+    format_error/1,
+
     print/1,
-    print/2,
     nl/0,
     error/1,
-    error/2,
     warning/1,
-    warning/2,
 
     pretty_atom/1,
     words/1,
@@ -44,7 +43,8 @@
     loose_atom/0,
     normal_form/0,
     package/0,
-    statistics/0
+    statistics/0,
+    error/0
 ]).
 
 -type file()        :: {erl | beam, file:filename()}.
@@ -147,38 +147,37 @@ global_ignores() ->
     [".git", ".hg", ".svn", ".idea"].
 
 
+%%% Errors
+
+-type error() :: {atomizer_cli_options, atomizer_cli_options:error()}
+               | {atomizer_parse,       atomizer_parse:error()}
+               | {atomizer_traverse,    atomizer_traverse:error()}.
+
+-spec format_error(error()) -> io_lib:chars().
+format_error({Module, Error}) -> Module:format_error(Error).
+
+
 %%% Printing to standard outputs
 
 print(Message) ->
     atomizer_output:put_chars(standard_io, [Message, "\n"]).
 
-print(Format, Args) ->
-    ?MODULE:print(io_lib:format(Format, Args)).
-
 nl() ->
     atomizer_output:put_chars(standard_io, "\n").
 
--spec error(io_lib:chars()) -> ok.
+-spec error(error()) -> ok.
 error(Error) ->
-    Message = [atomizer_output:bold("Error: "), Error],
+    Message = [atomizer_output:bold("Error: ") | format_error(Error)],
     atomizer_output:put_chars(standard_error, [atomizer_output:red(Message), "\n"]).
 
--spec error(string(), [term()]) -> ok.
-error(Format, Args) ->
-    ?MODULE:error(io_lib:format(Format, Args)).
-
--spec warning(io_lib:chars()) -> ok.
+-spec warning(error()) -> ok.
 warning(Warning) ->
     case atomizer_cli_options:get_verbosity() of
         0 -> ok;
         _ ->
-            Message = [atomizer_output:bold("Warning: "), Warning],
+            Message = [atomizer_output:bold("Warning: ") | format_error(Warning)],
             atomizer_output:put_chars(standard_error, [atomizer_output:yellow(Message), "\n"])
     end.
-
--spec warning(string(), [term()]) -> ok.
-warning(Format, Args) ->
-    warning(io_lib:format(Format, Args)).
 
 
 %%% Miscellaneous

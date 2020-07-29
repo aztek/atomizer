@@ -23,8 +23,8 @@ cli(CmdArgs) ->
                 {ok, ExitCode} ->
                     ExitCode;
 
-                {error, {Module, Error}} ->
-                    atomizer:error(Module:format_error(Error)),
+                {error, Error} ->
+                    atomizer:error(Error),
                     _Error = 2
             end;
 
