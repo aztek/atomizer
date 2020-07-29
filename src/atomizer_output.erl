@@ -13,6 +13,7 @@
     blue/1,
     magenta/1,
     cyan/1,
+    grey/1,
 
     bg_red/1,
     bg_yellow/1,
@@ -127,6 +128,7 @@ erase_progress_bar(LastShownProgressBar) ->
 -define(FG_BLUE,   "\e[34m").
 -define(FG_MAGENTA,"\e[35m").
 -define(FG_CYAN,   "\e[36m").
+-define(FG_GREY,   "\e[90m").
 
 -define(BG_RED,    "\e[41m").
 -define(BG_GREEN,  "\e[42m").
@@ -172,6 +174,9 @@ magenta(Chars) -> ascii_color(?FG_MAGENTA, Chars).
 
 -spec cyan(io_lib:chars()) -> io_lib:chars().
 cyan(Chars) -> ascii_color(?FG_CYAN, Chars).
+
+-spec grey(io_lib:chars()) -> io_lib:chars().
+grey(Chars) -> ascii_color(?FG_GREY, Chars).
 
 
 -spec bg_red(bg_io_lib:chars()) -> io_lib:chars().
