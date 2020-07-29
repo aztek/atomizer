@@ -234,7 +234,13 @@ parse_pattern(Pattern) -> case Pattern of
     {op,      _, _,      P} -> parse_pattern(P);
     {map,     _,        As} -> lists:foreach(fun parse_assoc/1, As);
     {record,  _,     _, Fs} -> lists:foreach(fun parse_record_field/1, Fs);
-    {record_index, _, _, _} -> ok
+    {record_index, _, _, _} -> ok;
+    % It can be {remote, _, _, _} if used in the 'catch' pattern
+    % The erl_parse:af_pattern() type is incomplete
+    {remote,  _, {atom, _, _}, {atom, _, _}} -> ok;
+    {remote,  _, A, {atom, _, _}} -> parse_pattern(A);
+    {remote,  _, {atom, _, _}, B} -> parse_pattern(B);
+    {remote,  _, A, B} -> parse_pattern(A), parse_pattern(B)
 end.
 
 -spec parse_guard(erl_parse:af_guard_test()) -> ok.
