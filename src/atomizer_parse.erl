@@ -240,7 +240,12 @@ parse_pattern(Pattern) -> case Pattern of
     {remote,  _, {atom, _, _}, {atom, _, _}} -> ok;
     {remote,  _, A, {atom, _, _}} -> parse_pattern(A);
     {remote,  _, {atom, _, _}, B} -> parse_pattern(B);
-    {remote,  _, A, B} -> parse_pattern(A), parse_pattern(B)
+    {remote,  _, A, B} -> parse_pattern(A), parse_pattern(B);
+    % It can be {call, _, _, _} if used as the ?Q macro from merl
+    % The erl_parse:af_pattern() type is once again incomplete
+    {call,    _, {atom, _, is_record}, _} -> ok;
+    {call,    _, {atom, _, _}, Es} -> lists:foreach(fun parse_expr/1, Es);
+    {call,    _, E, Es} -> lists:foreach(fun parse_expr/1, [E | Es])
 end.
 
 -spec parse_guard(erl_parse:af_guard_test()) -> ok.
