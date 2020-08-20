@@ -1,67 +1,83 @@
 -module(atomizer_cli).
 
 -export([
-    main/1
+    main/1,
+    report/2,
+    fail/1,
+    stop/0
 ]).
 
--spec main([string()]) -> no_return().
-main(CmdArgs) ->
-    atomizer_output:start(_Parent = self()),
-    ExitCode = cli(CmdArgs),
-    atomizer_output:stop(),
-    receive
-        ok -> erlang:halt(ExitCode)
-    end.
+-define(PROCESS_NAME, ?MODULE).
 
 -type exit_code() :: non_neg_integer().
 
--spec cli([string()]) -> exit_code().
+-spec main([string()]) -> no_return().
+main(CmdArgs) ->
+    register(?PROCESS_NAME, self()),
+    atomizer_output:start(),
+    ExitCode = run(CmdArgs),
+    atomizer_output:stop(),
+    receive
+        stop -> erlang:halt(ExitCode)
+    end.
+
+-spec report([atomizer:atom_info()] | [atomizer:loose_atom()], atomizer:statistics()) -> ok.
+report(Atoms, Stats) ->
+    ?PROCESS_NAME ! {ok, Atoms, Stats},
+    ok.
+
+-spec fail(atomizer:error()) -> ok.
+fail(Error) ->
+    ?PROCESS_NAME ! {error, Error},
+    ok.
+
+-spec quit(exit_code()) -> ok.
+quit(ExitCode) ->
+    ?PROCESS_NAME ! {quit, ExitCode},
+    ok.
+
+-spec stop() -> ok.
+stop() ->
+    ?PROCESS_NAME ! stop,
+    ok.
+
+-spec cli([string()]) -> ok.
 cli(CmdArgs) ->
     case atomizer_cli_options:parse(CmdArgs) of
         {options, Options} ->
-            case run(Options) of
-                {ok, ExitCode} ->
-                    ExitCode;
-
-                {error, Error} ->
-                    atomizer:error(Error),
-                    _Error = 2
-            end;
+            Package = atomizer_cli_options:package(Options),
+            atomizer_cli_options:init(Options),
+            Action = atomizer_cli_options:get_action(),
+            atomizer_sup:start(Package, Action);
 
         {message, Message} ->
             atomizer:print(Message),
-            _OK = 0;
+            quit(_OK = 0);
+
+        {error, Error} ->
+            fail(Error)
+    end.
+
+-spec run([string()]) -> exit_code().
+run(CmdArgs) ->
+    cli(CmdArgs),
+    receive
+        {ok, Atoms, Stats} ->
+            case atomizer_cli_options:get_action() of
+                list -> list_atoms(Atoms, Stats);
+                show -> show_atoms(Atoms, Stats);
+                warn -> show_loose_atoms(Atoms, Stats)
+            end;
 
         {error, Error} ->
             atomizer:error(Error),
-            _Error = 2
+            _ExitCode = 2;
+
+        {quit, ExitCode} ->
+            ExitCode
     end.
 
--spec run(atomizer_cli_options:options()) -> {ok, exit_code()} | {error, term()}.
-run(Options) ->
-    Package = atomizer_cli_options:package(Options),
-    atomizer_cli_options:init(Options),
-    case atomizer_cli_options:get_action() of
-        list ->
-            case atomizer_sup:collect_atoms(Package) of
-                {ok, Atoms, Stats} -> list_atoms(Atoms, Stats);
-                {error, Error} -> {error, Error}
-            end;
-
-        show ->
-            case atomizer_sup:collect_atoms(Package) of
-                {ok, Atoms, Stats} -> show_atoms(Atoms, Stats);
-                {error, Error} -> {error, Error}
-            end;
-
-        warn ->
-            case atomizer_sup:find_loose_atoms(Package) of
-                {ok, LooseAtoms, Stats} -> show_loose_atoms(LooseAtoms, Stats);
-                {error, Error} -> {error, Error}
-            end
-    end.
-
--spec list_atoms([atomizer:atom_info()], atomizer:statistics()) -> {ok, exit_code()}.
+-spec list_atoms([atomizer:atom_info()], atomizer:statistics()) -> exit_code().
 list_atoms(Atoms, Stats) ->
     lists:foreach(fun list_atom/1, Atoms),
     Verbosity = atomizer_cli_options:get_verbosity(),
@@ -69,7 +85,7 @@ list_atoms(Atoms, Stats) ->
         Verbosity > 1 -> show_statistics(Stats);
         true -> ok
     end,
-    {ok, 0}.
+    _ExitCode = 0.
 
 -spec list_atom(atomizer:atom_info()) -> ok.
 list_atom({Atom, Locations}) ->
@@ -80,7 +96,7 @@ list_atom({Atom, Locations}) ->
               [integer_to_list(NrFiles) || Verbosity == 2],
     atomizer:print(lists:join("\t", Columns)).
 
--spec show_atoms([atomizer:atom_info()], atomizer:statistics()) -> {ok, exit_code()}.
+-spec show_atoms([atomizer:atom_info()], atomizer:statistics()) -> exit_code().
 show_atoms(Atoms, Stats) ->
     lists:foreach(fun show_atom/1, Atoms),
     Verbosity = atomizer_cli_options:get_verbosity(),
@@ -88,7 +104,7 @@ show_atoms(Atoms, Stats) ->
         Verbosity > 1 -> show_statistics(Stats);
         true -> ok
     end,
-    {ok, 0}.
+    _ExitCode = 0.
 
 -spec show_abridged_list(fun ((A) -> any()), [A]) -> {ok, exit_code()} when A :: term().
 show_abridged_list(Printer, List) ->
@@ -131,12 +147,14 @@ show_position(Line) when is_integer(Line) ->
 show_position({Line, Column}) ->
     [integer_to_list(Line), ":", integer_to_list(Column)].
 
--spec show_loose_atoms([atomizer:loose_atom()], atomizer:statistics()) -> {ok, exit_code()}.
+-spec show_loose_atoms([atomizer:loose_atom()], atomizer:statistics()) -> exit_code().
 show_loose_atoms(LooseAtoms, Stats) ->
     lists:foreach(fun show_loose_atom/1, LooseAtoms),
     show_statistics(Stats),
-    ExitCode = case LooseAtoms of [] -> 0; _ -> 1 end,
-    {ok, ExitCode}.
+    case LooseAtoms of
+        [] -> 0;
+        _  -> 1
+    end.
 
 -spec show_statistics(atomizer:statistics()) -> ok.
 show_statistics(Stats) ->

@@ -1,7 +1,7 @@
 -module(atomizer_parse).
 
 -export([
-    parse/3,
+    parse/2,
     format_error/1
 ]).
 
@@ -12,9 +12,9 @@
 -type error() :: {file:filename() | atomizer:location(), {error | warning, lib_error()}}.
 -type lib_error() :: no_abstract_code | {epp | file | beam_lib, term()}.
 
--spec parse(pid(), atomizer:package(), atomizer:file()) -> ok | {error, {?MODULE, error()}}.
-parse(Pid, Package, File) ->
-    case parse_file(Pid, File, Package) of
+-spec parse(atomizer:package(), atomizer:file()) -> ok | {error, {?MODULE, error()}}.
+parse(Package, File) ->
+    case parse_file(File, Package) of
         ok -> ok;
         {error, Error} ->
             case atomizer_cli_options:get_warn_errors() of
@@ -26,18 +26,17 @@ parse(Pid, Package, File) ->
             end
     end.
 
--spec parse_file(pid(), atomizer:file(), atomizer:package()) -> ok | {error, {?MODULE, error()}}.
-parse_file(Pid, File, Package) ->
+-spec parse_file(atomizer:file(), atomizer:package()) -> ok | {error, {?MODULE, error()}}.
+parse_file(File, Package) ->
     IncludePaths = atomizer:package_includes(Package),
     case File of
-        {erl,  Path} -> parse_erl(Pid, Path, IncludePaths);
-        {beam, Path} -> parse_beam(Pid, Path)
+        {erl,  Path} -> parse_erl(Path, IncludePaths);
+        {beam, Path} -> parse_beam(Path)
     end.
 
--spec parse_erl(pid(), file:filename(), [file:filename()]) -> ok | {error, {?MODULE, error()}}.
-parse_erl(Pid, Path, IncludePaths) ->
+-spec parse_erl(file:filename(), [file:filename()]) -> ok | {error, {?MODULE, error()}}.
+parse_erl(Path, IncludePaths) ->
     put(filename, Path),
-    put(pid, Pid),
     case file:open(Path, [read]) of
         {ok, Fd} ->
             StartLocation = {1, 1},
@@ -78,10 +77,9 @@ parse_epp(Epp) ->
         {eof, _} -> ok
     end.
 
--spec parse_beam(pid(), file:filename()) -> ok | {error, {?MODULE, error()}}.
-parse_beam(Pid, Path) ->
+-spec parse_beam(file:filename()) -> ok | {error, {?MODULE, error()}}.
+parse_beam(Path) ->
     put(filename, Path),
-    put(pid, Pid),
     case beam_lib:chunks(Path, [abstract_code]) of
         {ok, {_, [{abstract_code, AbstractCode}]}} ->
             case AbstractCode of
@@ -140,7 +138,7 @@ end.
 
 -spec parse_expr(erl_parse:abstract_expr()) -> ok.
 parse_expr(Expr) -> case Expr of
-    {atom,      L,        A} -> get(pid) ! {atom, A, get(filename), L}, ok;
+    {atom,      L,        A} -> atomizer_sup:atom(A, get(filename), L);
     {char,      _,        _} -> ok;
     {float,     _,        _} -> ok;
     {integer,   _,        _} -> ok;
@@ -218,7 +216,7 @@ parse_clause({clause, _, Ps, Gs, Es}) ->
 
 -spec parse_pattern(erl_parse:af_pattern()) -> ok.
 parse_pattern(Pattern) -> case Pattern of
-    {atom,    L,         A} -> get(pid) ! {atom, A, get(filename), L}, ok;
+    {atom,    L,         A} -> atomizer_sup:atom(A, get(filename), L);
     {char,    _,         _} -> ok;
     {float,   _,         _} -> ok;
     {integer, _,         _} -> ok;
@@ -249,7 +247,7 @@ end.
 
 -spec parse_guard(erl_parse:af_guard_test()) -> ok.
 parse_guard(Guard) -> case Guard of
-    {atom,    L,         A} -> get(pid) ! {atom, A, get(filename), L}, ok;
+    {atom,    L,         A} -> atomizer_sup:atom(A, get(filename), L);
     {char,    _,         _} -> ok;
     {float,   _,         _} -> ok;
     {integer, _,         _} -> ok;
@@ -306,7 +304,7 @@ parse_type(Type) -> case Type of
     {type, _, _,         Ts} -> lists:foreach(fun parse_type/1, Ts);
     {ann_type,    _,     Ts} -> lists:foreach(fun parse_type/1, Ts);
     {remote_type, _,      _} -> ok;
-    {atom,        L,      A} -> get(pid) ! {atom, A, get(filename), L};
+    {atom,        L,      A} -> atomizer_sup:atom(A, get(filename), L);
     {char,        _,      _} -> ok;
     {integer,     _,      _} -> ok;
     {op,          _,   _, _} -> ok;

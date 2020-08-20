@@ -6,12 +6,30 @@
 -define(OPEN_FILE_LIMIT, 4).
 
 -export([
-    collect/2
+    start/1,
+    add_source/1
 ]).
 
--spec collect(pid(), atomizer:package()) ->
+-define(PROCESS_NAME, ?MODULE).
+
+-spec start(atomizer:package()) -> true.
+start(Package) ->
+    register(?PROCESS_NAME,
+             spawn(fun () ->
+                       case collect(Package) of
+                           {ok, NrFiles, NrDirs} -> atomizer_sup:done_atoms(NrFiles, NrDirs);
+                           {error, Error} -> atomizer_sup:fail(Error)
+                       end
+                   end)).
+
+-spec add_source(atomizer:source()) -> ok.
+add_source(Source) ->
+    ?PROCESS_NAME ! {add_source, Source},
+    ok.
+
+-spec collect(atomizer:package()) ->
     {ok, NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()} | {error, atomizer:error()}.
-collect(Pid, Package) ->
+collect(Package) ->
     case collect_sources(Package) of
         {ok, Sources} ->
             Pool  = ets:new(pool,  [private, set]),
@@ -23,7 +41,7 @@ collect(Pid, Package) ->
             Result = case loop_dirs(_NrFiles = 0, _NrDirs = 0, Pool, Dirs, Files, Package) of
                          {ok, NrFiles, NrDirs} ->
                              atomizer_progress:next(_Elapsed = 0, NrFiles),
-                             case loop_files(Pid, Pool, Files, Package) of
+                             case loop_files(Pool, Files, Package) of
                                  ok -> {ok, NrFiles, NrDirs};
                                  {error, Error} -> {error, Error}
                              end;
@@ -68,11 +86,10 @@ loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package) ->
         {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_DIR_LIMIT, QueueSize > 0 ->
             Dir = ets:first(Dirs),
             ets:delete(Dirs, Dir),
-            Self = self(),
             spawn_link(fun () ->
-                           case atomizer_traverse:traverse(Self, Package, Dir) of
-                               ok    -> Self ! {done_dir, Dir};
-                               Error -> Self ! Error
+                           case atomizer_traverse:traverse(Package, Dir) of
+                               ok    -> ?PROCESS_NAME ! {done_dir, Dir};
+                               Error -> ?PROCESS_NAME ! Error
                            end
                        end),
             ets:insert(Pool, {Dir}),
@@ -108,30 +125,29 @@ loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package) ->
             end
     end.
 
--spec loop_files(pid(), ets:tid(), ets:tid(), atomizer:package()) -> ok | {error, atomizer:error()}.
-loop_files(Pid, Pool, Files, Package) ->
+-spec loop_files(ets:tid(), ets:tid(), atomizer:package()) -> ok | {error, atomizer:error()}.
+loop_files(Pool, Files, Package) ->
     case {ets:info(Pool, size), ets:info(Files, size)} of
         {0, 0} -> ok;
 
         {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_FILE_LIMIT, QueueSize > 0 ->
             File = ets:first(Files),
             ets:delete(Files, File),
-            Self = self(),
             spawn_link(fun () ->
-                           case atomizer_parse:parse(Pid, Package, File) of
-                               ok    -> Self ! {done_file, File};
-                               Error -> Self ! Error
+                           case atomizer_parse:parse(Package, File) of
+                               ok    -> ?PROCESS_NAME ! {done_file, File};
+                               Error -> ?PROCESS_NAME ! Error
                            end
                        end),
             ets:insert(Pool, {File}),
-            loop_files(Pid, Pool, Files, Package);
+            loop_files(Pool, Files, Package);
 
         _ ->
             receive
                 {done_file, File} ->
                     atomizer_progress:progress(1),
                     ets:delete(Pool, File),
-                    loop_files(Pid, Pool, Files, Package);
+                    loop_files(Pool, Files, Package);
 
                 {error, Error} ->
                     {error, Error}

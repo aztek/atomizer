@@ -1,7 +1,7 @@
 -module(atomizer_output).
 
 -export([
-    start/1,
+    start/0,
     put_chars/2,
     set_progress/1,
     hide_progress/0,
@@ -31,9 +31,9 @@
 
 -define(PROGRESS_BAR_DEVICE, standard_error).
 
--spec start(pid()) -> true.
-start(Parent) ->
-    register(?PROCESS_NAME, spawn(fun () -> Parent ! loop() end)).
+-spec start() -> true.
+start() ->
+    register(?PROCESS_NAME, spawn(fun () -> loop() end)).
 
 -spec loop() -> ok.
 loop() ->
@@ -50,10 +50,10 @@ loop() ->
             loop();
 
         stop ->
-            ok
+            atomizer_cli:stop()
     end.
 
--spec loop_progress(string()) -> {halt, ExitCode :: integer()}.
+-spec loop_progress(string()) -> ok.
 loop_progress(LastShownProgressBar) ->
     receive
         {output, IoDevice, Message} ->
@@ -75,7 +75,7 @@ loop_progress(LastShownProgressBar) ->
 
         stop ->
             erase_progress_bar(LastShownProgressBar),
-            ok
+            atomizer_cli:stop()
     end.
 
 -spec put_chars(io:device(), io_lib:chars()) -> ok.

@@ -1,25 +1,60 @@
 -module(atomizer_sup).
 
 -export([
-    collect_atoms/1,
-    find_loose_atoms/1
+    start/2,
+    atom/3,
+    lookalikes/2,
+    done_atoms/2,
+    fail/1,
+    stop/0
 ]).
 
--type result(A) :: {ok, [A], atomizer:statistics()} | {error, atomizer:error()}.
+-define(PROCESS_NAME, ?MODULE).
 
--spec collect_atoms(atomizer:package()) -> result(atomizer:atom_info()).
-collect_atoms(Package) ->
-    Self = self(),
-    spawn_link(fun () ->
-                   case atomizer_collect:collect(Self, Package) of
-                       {ok, NrFiles, NrDirs} -> Self ! {done_atoms, NrFiles, NrDirs};
-                       {error, Error} -> Self ! {error, Error}
-                   end
-               end),
-    atomizer_progress:start(),
-    Result = collect_atoms_loop(maps:new()),
-    atomizer_progress:finish(),
-    Result.
+-spec atom(atom(), file:filename(), atomizer:position()) -> ok.
+atom(Atom, File, Position) ->
+    ?PROCESS_NAME ! {atom, Atom, File, Position},
+    ok.
+
+-spec lookalikes(atom(), atom()) -> ok.
+lookalikes(Atom, Lookalike) ->
+    ?PROCESS_NAME ! {lookalikes, Atom, Lookalike},
+    ok.
+
+-spec done_atoms(NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()) -> ok.
+done_atoms(NrFiles, NrDirs) ->
+    ?PROCESS_NAME ! {done_atoms, NrFiles, NrDirs},
+    ok.
+
+-spec fail(atomizer:error()) -> ok.
+fail(Error) ->
+    ?PROCESS_NAME ! {error, Error},
+    ok.
+
+-spec stop() -> ok.
+stop() ->
+    ?PROCESS_NAME ! done_comparing,
+    ok.
+
+-spec start(atomizer:package(), atomizer_cli_options:action()) -> true.
+start(Package, Action) ->
+    register(?PROCESS_NAME,
+             spawn_link(fun () ->
+                            atomizer_progress:start(),
+                            atomizer_compare:start(),
+                            atomizer_collect:start(Package),
+                            Result = case Action of
+                                         warn  -> find_loose_atoms_loop(maps:new(), sets:new(), {-1, -1});
+                                         _Show -> collect_atoms_loop(maps:new())
+                                     end,
+                            atomizer_progress:finish(),
+                            case Result of
+                                {ok, Atoms, Stats} -> atomizer_cli:report(Atoms, Stats);
+                                {error, Error} -> atomizer_cli:fail(Error)
+                            end
+                        end)).
+
+-type result(A) :: {ok, [A], atomizer:statistics()} | {error, atomizer:error()}.
 
 -spec collect_atoms_loop(atomizer:atoms()) -> result(atomizer:atom_info()).
 collect_atoms_loop(Atoms) ->
@@ -28,6 +63,7 @@ collect_atoms_loop(Atoms) ->
             collect_atoms_loop(add_atom_location(Atom, File, Position, Atoms));
 
         {done_atoms, NrFiles, NrDirs} ->
+            atomizer_compare:stop(),
             SortedAtoms = [{Atom, maps:get(Atom, Atoms)} || Atom <- lists:sort(maps:keys(Atoms))],
             Stats = atomizer:statistics(_NrLooseAtoms = -1, _NrAtoms = length(SortedAtoms), NrFiles, NrDirs),
             {ok, SortedAtoms, Stats};
@@ -42,35 +78,20 @@ collect_atoms_loop(Atoms) ->
             end
     end.
 
--spec find_loose_atoms(atomizer:package()) -> result(atomizer:loose_atom()).
-find_loose_atoms(Package) ->
-    Pid = spawn_link(atomizer_compare, compare, [self()]),
-    Self = self(),
-    spawn_link(fun () ->
-                   case atomizer_collect:collect(Self, Package) of
-                       {ok, NrFiles, NrDirs} -> Self ! {done_atoms, NrFiles, NrDirs};
-                       {error, Error} -> Self ! {error, Error}
-                   end
-               end),
-    atomizer_progress:start(),
-    Result = find_loose_atoms_loop(Pid, maps:new(), sets:new(), {-1, -1}),
-    atomizer_progress:finish(),
-    Result.
-
--spec find_loose_atoms_loop(pid(), atomizer:atoms(), atomizer:lookalikes(), {integer(), integer()}) ->
+-spec find_loose_atoms_loop(atomizer:atoms(), atomizer:lookalikes(), {integer(), integer()}) ->
     result(atomizer:loose_atom()).
-find_loose_atoms_loop(Pid, Atoms, Lookalikes, NrParsed) ->
+find_loose_atoms_loop(Atoms, Lookalikes, NrParsed) ->
     receive
         {atom, Atom, File, Position} ->
-            Pid ! {atom, Atom},
-            find_loose_atoms_loop(Pid, add_atom_location(Atom, File, Position, Atoms), Lookalikes, NrParsed);
+            atomizer_compare:atom(Atom),
+            find_loose_atoms_loop(add_atom_location(Atom, File, Position, Atoms), Lookalikes, NrParsed);
 
         {done_atoms, NrFiles, NrDirs} ->
-            Pid ! done_atoms,
-            find_loose_atoms_loop(Pid, Atoms, Lookalikes, {NrFiles, NrDirs});
+            atomizer_compare:stop(),
+            find_loose_atoms_loop(Atoms, Lookalikes, {NrFiles, NrDirs});
 
         {lookalikes, Atom, Lookalike} ->
-            find_loose_atoms_loop(Pid, Atoms, sets:add_element({Atom, Lookalike}, Lookalikes), NrParsed);
+            find_loose_atoms_loop(Atoms, sets:add_element({Atom, Lookalike}, Lookalikes), NrParsed);
 
         done_comparing ->
             LooseAtoms = lists:filtermap(fun ({A, B}) ->
@@ -87,7 +108,7 @@ find_loose_atoms_loop(Pid, Atoms, Lookalikes, NrParsed) ->
             case atomizer_cli_options:get_warn_errors() of
                 true ->
                     atomizer:warning(Error),
-                    find_loose_atoms_loop(Pid, Atoms, Lookalikes, NrParsed);
+                    find_loose_atoms_loop(Atoms, Lookalikes, NrParsed);
                 false ->
                     {error, Error}
             end

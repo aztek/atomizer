@@ -7,7 +7,7 @@
 -define(BEAM_EXTENSIONS, [".beam"]).
 
 -export([
-    traverse/3,
+    traverse/2,
     detect_source/2,
     format_error/1
 ]).
@@ -19,11 +19,11 @@
 -type symlink() :: {Source :: file:filename(), Destination :: file:filename()}.
 -type error()   :: {file:filename() | symlink(), atomizer:error()}.
 
--spec traverse(pid(), atomizer:package(), file:filename()) -> ok | {error, atomizer:error()}.
-traverse(Pid, Package, Dir) ->
+-spec traverse(atomizer:package(), file:filename()) -> ok | {error, atomizer:error()}.
+traverse(Package, Dir) ->
     case file:list_dir(Dir) of
         {ok, Paths} ->
-            lists:foreach(fun (Path) -> traverse_path(Pid, Package, filename:join(Dir, Path)) end, Paths),
+            lists:foreach(fun (Path) -> traverse_path(Package, filename:join(Dir, Path)) end, Paths),
             ok;
 
         {error, Error} ->
@@ -38,11 +38,11 @@ traverse(Pid, Package, Dir) ->
             end
     end.
 
--spec traverse_path(pid(), atomizer:package(), file:filename()) ->
+-spec traverse_path(atomizer:package(), file:filename()) ->
     ignore | {add_source, atomizer:source()} | {error, error()}.
-traverse_path(Pid, Package, Path) ->
+traverse_path(Package, Path) ->
     case detect_source(Path, Package) of
-        {ok, Source} -> Pid ! {add_source, Source};
+        {ok, Source} -> atomizer_collect:add_source(Source);
         ignore -> ignore;
         {error, Error} ->
             case atomizer_cli_options:get_warn_errors() of
