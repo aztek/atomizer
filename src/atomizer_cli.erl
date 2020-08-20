@@ -3,8 +3,7 @@
 -export([
     main/1,
     report/2,
-    fail/1,
-    stop/0
+    fail/1
 ]).
 
 -define(PROCESS_NAME, ?MODULE).
@@ -17,9 +16,7 @@ main(CmdArgs) ->
     atomizer_output:start(),
     ExitCode = run(CmdArgs),
     atomizer_output:stop(),
-    receive
-        stop -> erlang:halt(ExitCode)
-    end.
+    erlang:halt(ExitCode).
 
 -spec report([atomizer:atom_info()] | [atomizer:loose_atom()], atomizer:statistics()) -> ok.
 report(Atoms, Stats) ->
@@ -34,11 +31,6 @@ fail(Error) ->
 -spec quit(exit_code()) -> ok.
 quit(ExitCode) ->
     ?PROCESS_NAME ! {quit, ExitCode},
-    ok.
-
--spec stop() -> ok.
-stop() ->
-    ?PROCESS_NAME ! stop,
     ok.
 
 -spec cli([string()]) -> ok.
