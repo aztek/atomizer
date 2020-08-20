@@ -19,20 +19,19 @@
 -type symlink() :: {Source :: file:filename(), Destination :: file:filename()}.
 -type error()   :: {file:filename() | symlink(), atomizer:error()}.
 
--spec traverse(pid(), atomizer:package(), file:filename()) ->
-    {done_dir, file:filename()} | {error, atomizer:error()}.
+-spec traverse(pid(), atomizer:package(), file:filename()) -> ok | {error, atomizer:error()}.
 traverse(Pid, Package, Dir) ->
     case file:list_dir(Dir) of
         {ok, Paths} ->
             lists:foreach(fun (Path) -> traverse_path(Pid, Package, filename:join(Dir, Path)) end, Paths),
-            {done_dir, Dir};
+            ok;
 
         {error, Error} ->
             ExtendedError = {?MODULE, {Dir, {file, Error}}},
             case atomizer_cli_options:get_warn_errors() of
                 true ->
                     atomizer:warning(ExtendedError),
-                    {done_dir, Dir};
+                    ok;
 
                 false ->
                     {error, ExtendedError}

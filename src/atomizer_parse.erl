@@ -12,16 +12,15 @@
 -type error() :: {file:filename() | atomizer:location(), {error | warning, lib_error()}}.
 -type lib_error() :: no_abstract_code | {epp | file | beam_lib, term()}.
 
--spec parse(pid(), atomizer:package(), atomizer:file()) ->
-    {done_file, atomizer:file()} | {error, {?MODULE, error()}}.
+-spec parse(pid(), atomizer:package(), atomizer:file()) -> ok | {error, {?MODULE, error()}}.
 parse(Pid, Package, File) ->
     case parse_file(Pid, File, Package) of
-        ok -> {done_file, File};
+        ok -> ok;
         {error, Error} ->
             case atomizer_cli_options:get_warn_errors() of
                 true ->
                     atomizer:warning(Error),
-                    {done_file, File};
+                    ok;
                 false ->
                     {error, Error}
             end

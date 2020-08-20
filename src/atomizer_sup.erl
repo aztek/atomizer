@@ -9,7 +9,13 @@
 
 -spec collect_atoms(atomizer:package()) -> result(atomizer:atom_info()).
 collect_atoms(Package) ->
-    spawn_link(atomizer_collect, collect, [self(), Package]),
+    Self = self(),
+    spawn_link(fun () ->
+                   case atomizer_collect:collect(Self, Package) of
+                       {ok, NrFiles, NrDirs} -> Self ! {done_atoms, NrFiles, NrDirs};
+                       {error, Error} -> Self ! {error, Error}
+                   end
+               end),
     atomizer_progress:start(),
     Result = collect_atoms_loop(maps:new()),
     atomizer_progress:finish(),
@@ -39,7 +45,13 @@ collect_atoms_loop(Atoms) ->
 -spec find_loose_atoms(atomizer:package()) -> result(atomizer:loose_atom()).
 find_loose_atoms(Package) ->
     Pid = spawn_link(atomizer_compare, compare, [self()]),
-    spawn_link(atomizer_collect, collect, [self(), Package]),
+    Self = self(),
+    spawn_link(fun () ->
+                   case atomizer_collect:collect(Self, Package) of
+                       {ok, NrFiles, NrDirs} -> Self ! {done_atoms, NrFiles, NrDirs};
+                       {error, Error} -> Self ! {error, Error}
+                   end
+               end),
     atomizer_progress:start(),
     Result = find_loose_atoms_loop(Pid, maps:new(), sets:new(), {-1, -1}),
     atomizer_progress:finish(),

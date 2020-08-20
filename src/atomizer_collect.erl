@@ -10,16 +10,8 @@
 ]).
 
 -spec collect(pid(), atomizer:package()) ->
-    {done_atoms, NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()} | {error, atomizer:error()}.
-collect(Pid, Package) ->
-    case collect_paths(Pid, Package) of
-        {ok, NrFiles, NrDirs} -> Pid ! {done_atoms, NrFiles, NrDirs};
-        {error, Error} -> Pid ! {error, Error}
-    end.
-
--spec collect_paths(pid(), atomizer:package()) ->
     {ok, NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()} | {error, atomizer:error()}.
-collect_paths(Pid, Package) ->
+collect(Pid, Package) ->
     case collect_sources(Package) of
         {ok, Sources} ->
             Pool  = ets:new(pool,  [private, set]),
@@ -77,7 +69,12 @@ loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package) ->
             Dir = ets:first(Dirs),
             ets:delete(Dirs, Dir),
             Self = self(),
-            spawn_link(fun () -> Self ! atomizer_traverse:traverse(Self, Package, Dir) end),
+            spawn_link(fun () ->
+                           case atomizer_traverse:traverse(Self, Package, Dir) of
+                               ok    -> Self ! {done_dir, Dir};
+                               Error -> Self ! Error
+                           end
+                       end),
             ets:insert(Pool, {Dir}),
             loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package);
 
@@ -120,7 +117,12 @@ loop_files(Pid, Pool, Files, Package) ->
             File = ets:first(Files),
             ets:delete(Files, File),
             Self = self(),
-            spawn_link(fun () -> Self ! atomizer_parse:parse(Pid, Package, File) end),
+            spawn_link(fun () ->
+                           case atomizer_parse:parse(Pid, Package, File) of
+                               ok    -> Self ! {done_file, File};
+                               Error -> Self ! Error
+                           end
+                       end),
             ets:insert(Pool, {File}),
             loop_files(Pid, Pool, Files, Package);
 
