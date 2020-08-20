@@ -98,10 +98,10 @@ format_error({Location, {Severity, Reason}}) ->
 
     Filename = case Location of
                    {Path, {Line, Column}} ->
-                       atomizer:words([Path, "line",  [atomizer_output:bold(integer_to_list(Line)), ","],
-                                             "column", atomizer_output:bold(integer_to_list(Column))]);
+                       atomizer:words([Path, "line",  [atomizer_color:bold(integer_to_list(Line)), ","],
+                                             "column", atomizer_color:bold(integer_to_list(Column))]);
                    {Path, Line} ->
-                       atomizer:words([Path, "line", atomizer_output:bold(integer_to_list(Line))]);
+                       atomizer:words([Path, "line", atomizer_color:bold(integer_to_list(Line))]);
                    Path ->
                        Path
                end,

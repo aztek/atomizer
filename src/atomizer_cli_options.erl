@@ -202,7 +202,7 @@ get_action() ->
 
 -spec format_error(error()) -> io_lib:chars().
 format_error({unrecognized_option, Option}) ->
-    ["Unrecognized option ", atomizer_output:bold(["-", Option]), "."];
+    ["Unrecognized option ", atomizer_color:bold(["-", Option]), "."];
 
 format_error({missing_argument, Option}) ->
     ["Malformed arguments - ", atom_to_list(Option), "is missing."];

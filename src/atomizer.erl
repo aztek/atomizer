@@ -167,16 +167,16 @@ nl() ->
 
 -spec error(error()) -> ok.
 error(Error) ->
-    Message = [atomizer_output:bold("Error: ") | format_error(Error)],
-    atomizer_output:put_chars(standard_error, [atomizer_output:red(Message), "\n"]).
+    Message = [atomizer_color:bold("Error: ") | format_error(Error)],
+    atomizer_output:put_chars(standard_error, [atomizer_color:red(Message), "\n"]).
 
 -spec warning(error()) -> ok.
 warning(Warning) ->
     case atomizer_cli_options:get_verbosity() of
         0 -> ok;
         _ ->
-            Message = [atomizer_output:bold("Warning: ") | format_error(Warning)],
-            atomizer_output:put_chars(standard_error, [atomizer_output:yellow(Message), "\n"])
+            Message = [atomizer_color:bold("Warning: ") | format_error(Warning)],
+            atomizer_output:put_chars(standard_error, [atomizer_color:yellow(Message), "\n"])
     end.
 
 
