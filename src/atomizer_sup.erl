@@ -48,11 +48,10 @@ stop() ->
 start(Package, Action) ->
     register(?PROCESS_NAME,
              spawn_link(fun () ->
-                            atomizer_progress:start(),
                             atomizer_compare:start(),
                             atomizer_collect:start(Package),
                             Result = loop(#state{action = Action}),
-                            atomizer_progress:finish(),
+                            atomizer_progress:stop(),
                             case Result of
                                 {ok, Atoms, Stats} -> atomizer_cli:report(Atoms, Stats);
                                 {error, Error} -> atomizer_cli:fail(Error)

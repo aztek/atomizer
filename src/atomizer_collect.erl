@@ -30,6 +30,7 @@ add_source(Source) ->
 -spec collect(atomizer:package()) ->
     {ok, NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()} | {error, atomizer:error()}.
 collect(Package) ->
+    atomizer_spinner:start(),
     case collect_sources(Package) of
         {ok, Sources} ->
             Pool  = ets:new(pool,  [private, set]),
@@ -40,7 +41,8 @@ collect(Package) ->
                           end, Sources),
             Result = case loop_dirs(_NrFiles = 0, _NrDirs = 0, Pool, Dirs, Files, Package) of
                          {ok, NrFiles, NrDirs} ->
-                             atomizer_progress:next(_Elapsed = 0, NrFiles),
+                             atomizer_spinner:stop(),
+                             atomizer_progress:start(_Elapsed = 0, NrFiles),
                              case loop_files(Pool, Files, Package) of
                                  ok -> {ok, NrFiles, NrDirs};
                                  {error, Error} -> {error, Error}
@@ -60,7 +62,7 @@ collect_sources(Package) ->
                   (Path, {ok, Sources}) ->
                       case atomizer_traverse:detect_source(Path, Package) of
                           {ok, Source} ->
-                              atomizer_progress:tick("Collecting files and directories (~p)"),
+                              atomizer_spinner:tick("Collecting files and directories (~p)"),
                               {ok, [Source | Sources]};
                           ignore -> {ok, Sources};
                           {error, Error} ->
@@ -104,7 +106,7 @@ loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package) ->
                     case SkipSource of
                         true -> ok;
                         false ->
-                            atomizer_progress:tick("Collecting files and directories (~p)"),
+                            atomizer_spinner:tick("Collecting files and directories (~p)"),
                             case Source of
                                 {dir, Dir} ->
                                     ets:insert(Dirs, {Dir}),
