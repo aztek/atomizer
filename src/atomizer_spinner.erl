@@ -1,54 +1,64 @@
 -module(atomizer_spinner).
 
+-behavior(gen_server).
+
 -export([
     start/0,
     tick/1,
-    stop/0
+    stop/0,
+
+    init/1,
+    handle_call/3,
+    handle_cast/2
 ]).
-
--type phase() :: 0..3.
-
--define(PROCESS_NAME, ?MODULE).
 
 -define(TICK_INTERVAL, 200).
 -define(SPINNER_PHASES, [$|, $/, $-, $\\]).
 
--spec start() -> true.
+-type phase() :: 0..3.
+
+-record(state, {
+    ticks       = 0 :: non_neg_integer() | stop,
+    last_phase  = 0 :: phase(),
+    last_ticked = 0 :: integer()
+}).
+
 start() ->
-    register(?PROCESS_NAME, spawn(fun () -> loop(0, 0, 0) end)).
-
--spec loop(non_neg_integer() | stop, phase(), non_neg_integer()) -> no_return().
-loop(Ticks, LastPhase, LastTicked) ->
-    receive
-        {tick, _} when Ticks == stop ->
-            loop(Ticks, LastPhase, LastTicked);
-
-        {tick, Format} ->
-            NowTicked = erlang:system_time(millisecond),
-            case NowTicked - LastTicked >= ?TICK_INTERVAL of
-                true ->
-                    NextPhase = (LastPhase + 1) rem length(?SPINNER_PHASES),
-                    atomizer_output:set_progress(render_spinner(Ticks, NextPhase, Format)),
-                    loop(Ticks + 1, NextPhase, NowTicked);
-
-                false ->
-                    loop(Ticks + 1, LastPhase, LastTicked)
-            end;
-
-        stop ->
-            atomizer_output:hide_progress(),
-            loop(stop, LastPhase, LastTicked)
-    end.
+    gen_server:start({local, ?MODULE}, ?MODULE, [], []).
 
 -spec tick(string()) -> ok.
 tick(Format) ->
-    ?PROCESS_NAME ! {tick, Format},
-    ok.
+    gen_server:cast(?MODULE, {tick, Format}).
 
 -spec stop() -> ok.
 stop() ->
-    ?PROCESS_NAME ! stop,
-    ok.
+    gen_server:cast(?MODULE, stop).
+
+init(_Args) ->
+    {ok, #state{}}.
+
+handle_call(_Request, _From, State) ->
+    {noreply, State}.
+
+handle_cast({tick, _}, State) when State#state.ticks == stop ->
+    {noreply, State};
+
+handle_cast({tick, Format}, State) ->
+    #state{ticks=Ticks, last_phase=LastPhase, last_ticked=LastTicked} = State,
+    NowTicked = erlang:system_time(millisecond),
+    case NowTicked - LastTicked >= ?TICK_INTERVAL of
+        true ->
+            NextPhase = (LastPhase + 1) rem length(?SPINNER_PHASES),
+            atomizer_output:set_progress(render_spinner(Ticks, NextPhase, Format)),
+            {noreply, #state{ticks = Ticks + 1, last_phase = NextPhase, last_ticked = NowTicked}};
+
+        false ->
+            {noreply, State#state{ticks = Ticks + 1}}
+    end;
+
+handle_cast(stop, State) ->
+    atomizer_output:hide_progress(),
+    {noreply, State#state{ticks=stop}}.
 
 -spec render_spinner(non_neg_integer(), phase(), string()) -> io_lib:chars().
 render_spinner(Ticks, Phase, Format) ->
