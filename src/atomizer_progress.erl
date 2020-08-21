@@ -1,55 +1,65 @@
 -module(atomizer_progress).
 
+-behavior(gen_server).
+
 -export([
     start/2,
     progress/1,
-    stop/0
+    stop/0,
+
+    init/1,
+    handle_call/3,
+    handle_cast/2
 ]).
-
--type progress() :: 0..100.
-
--define(PROCESS_NAME, ?MODULE).
 
 -define(PROGRESS_BAR_SCALE, 70).
 -define(PROGRESS_BAR_WIDTH, ?PROGRESS_BAR_SCALE + 7).
 
--spec start(non_neg_integer(), non_neg_integer()) -> true.
+-type progress() :: 0..100.
+
+-record(state, {
+    total   :: non_neg_integer(),
+    elapsed :: non_neg_integer(),
+    last_shown_progress = 0 :: progress()
+}).
+
 start(Elapsed, Total) ->
-    register(?PROCESS_NAME, spawn(fun () -> loop(Total, Elapsed, _LastShownProgress = 0) end)).
-
--spec loop(non_neg_integer(), non_neg_integer(), progress()) -> no_return().
-loop(Total, Elapsed, LastShownProgress) ->
-    receive
-        {progress, Delta} ->
-            IncreasedElapsed = Elapsed + Delta,
-            IncreasedProgress = case Total of
-                                    0 -> 100;
-                                    _ -> erlang:floor(100 * IncreasedElapsed / Total)
-                                end,
-            Progress = erlang:min(100, IncreasedProgress),
-            case Progress > LastShownProgress of
-                true ->
-                    atomizer_output:set_progress(render_progress_bar(Progress)),
-                    loop(Total, IncreasedElapsed, Progress);
-
-                false ->
-                    loop(Total, IncreasedElapsed, LastShownProgress)
-            end;
-
-        stop ->
-            atomizer_output:hide_progress(),
-            loop(Total, Elapsed, _LastShownProgress = 100)
-    end.
+    gen_server:start({local, ?MODULE}, ?MODULE, [Elapsed, Total], []).
 
 -spec progress(non_neg_integer()) -> ok.
 progress(Delta) ->
-    ?PROCESS_NAME ! {progress, Delta},
-    ok.
+    gen_server:cast(?MODULE, {progress, Delta}).
 
 -spec stop() -> ok.
 stop() ->
-    ?PROCESS_NAME ! stop,
-    ok.
+    gen_server:cast(?MODULE, stop).
+
+init([Elapsed, Total]) ->
+    {ok, #state{total = Total, elapsed = Elapsed}}.
+
+handle_call(_Request, _From, State) ->
+    {noreply, State}.
+
+handle_cast({progress, Delta}, State) ->
+    #state{total = Total, elapsed = Elapsed, last_shown_progress = LastShownProgress} = State,
+    IncreasedElapsed = Elapsed + Delta,
+    IncreasedProgress = case Total of
+                            0 -> 100;
+                            _ -> erlang:floor(100 * IncreasedElapsed / Total)
+                        end,
+    Progress = erlang:min(100, IncreasedProgress),
+    case Progress > LastShownProgress of
+        true ->
+            atomizer_output:set_progress(render_progress_bar(Progress)),
+            {noreply, State#state{elapsed = IncreasedElapsed, last_shown_progress = Progress}};
+
+        false ->
+            {noreply, State#state{elapsed = IncreasedElapsed}}
+    end;
+
+handle_cast(stop, State) ->
+    atomizer_output:hide_progress(),
+    {noreply, State#state{last_shown_progress = 100}}.
 
 -spec render_progress_bar(progress()) -> io_lib:chars().
 render_progress_bar(Progress) ->
