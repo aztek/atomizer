@@ -1,41 +1,19 @@
 -module(atomizer_sup).
 
+-behavior(gen_server).
+
 -export([
     start/2,
     atom/3,
     lookalikes/2,
     done_atoms/2,
     fail/1,
-    stop/0
+    stop/0,
+
+    init/1,
+    handle_call/3,
+    handle_cast/2
 ]).
-
--define(PROCESS_NAME, ?MODULE).
-
--spec atom(atom(), file:filename(), atomizer:position()) -> ok.
-atom(Atom, File, Position) ->
-    ?PROCESS_NAME ! {atom, Atom, File, Position},
-    ok.
-
--spec lookalikes(atom(), atom()) -> ok.
-lookalikes(Atom, Lookalike) ->
-    ?PROCESS_NAME ! {lookalikes, Atom, Lookalike},
-    ok.
-
--spec done_atoms(NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()) -> ok.
-done_atoms(NrFiles, NrDirs) ->
-    ?PROCESS_NAME ! {done_atoms, NrFiles, NrDirs},
-    ok.
-
--spec fail(atomizer:error()) -> ok.
-fail(Error) ->
-    ?PROCESS_NAME ! {error, Error},
-    ok.
-
--spec stop() -> ok.
-stop() ->
-    ?PROCESS_NAME ! done_comparing,
-    ok.
-
 
 -record(state, {
     action :: atomizer_cli_options:action(),
@@ -44,69 +22,83 @@ stop() ->
     nr_parsed  = {-1, -1}   :: {integer(), integer()}
 }).
 
+init([Package, Action]) ->
+    atomizer_collect:start(Package),
+    case Action of
+        warn -> atomizer_compare:start();
+        _    -> ignore
+    end,
+    {ok, #state{action = Action}}.
+
+handle_call(_Request, _From, State) ->
+    {noreply, State}.
+
+handle_cast({atom, Atom, File, Position}, State) ->
+    case State#state.action of
+        warn -> atomizer_compare:atom(Atom);
+        _    -> ignore
+    end,
+    Atoms = add_atom_location(Atom, File, Position, State#state.atoms),
+    {noreply, State#state{atoms=Atoms}};
+
+handle_cast({done_atoms, NrFiles, NrDirs}, State) when State#state.action == warn ->
+    atomizer_compare:stop(),
+    {noreply, State#state{nr_parsed = {NrFiles, NrDirs}}};
+
+handle_cast({done_atoms, NrFiles, NrDirs}, State) ->
+    Atoms = State#state.atoms,
+    SortedAtoms = [{Atom, maps:get(Atom, Atoms)} || Atom <- lists:sort(maps:keys(Atoms))],
+    Stats = atomizer:statistics(_NrLooseAtoms = -1, _NrAtoms = length(SortedAtoms), NrFiles, NrDirs),
+    atomizer_cli:report(SortedAtoms, Stats),
+    {noreply, State};
+
+handle_cast({lookalikes, Atom, Lookalike}, State) ->
+    Lookalikes = sets:add_element({Atom, Lookalike}, State#state.lookalikes),
+    {noreply, State#state{lookalikes = Lookalikes}};
+
+handle_cast(done_comparing, State) ->
+    #state{atoms = Atoms, lookalikes = Lookalikes, nr_parsed = NrParsed} = State,
+    LooseAtoms = lists:filtermap(fun ({A, B}) ->
+                                     is_loose({A, maps:get(A, Atoms)}, {B, maps:get(B, Atoms)})
+                                 end,
+                                 sets:to_list(Lookalikes)),
+    NrAtoms = maps:size(Atoms),
+    NrLooseAtoms = length(LooseAtoms),
+    {NrFiles, NrDirs} = NrParsed,
+    Stats = atomizer:statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs),
+    atomizer_cli:report(lists:sort(LooseAtoms), Stats),
+    {noreply, State};
+
+handle_cast({error, Error}, State) ->
+    case atomizer_cli_options:get_warn_errors() of
+        true  -> atomizer:warning(Error);
+        false -> atomizer_cli:fail(Error)
+    end,
+    {noreply, State}.
+
+-spec atom(atom(), file:filename(), atomizer:position()) -> ok.
+atom(Atom, File, Position) ->
+    gen_server:cast(?MODULE, {atom, Atom, File, Position}).
+
+-spec lookalikes(atom(), atom()) -> ok.
+lookalikes(Atom, Lookalike) ->
+    gen_server:cast(?MODULE, {lookalikes, Atom, Lookalike}).
+
+-spec done_atoms(NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()) -> ok.
+done_atoms(NrFiles, NrDirs) ->
+    gen_server:cast(?MODULE, {done_atoms, NrFiles, NrDirs}).
+
+-spec fail(atomizer:error()) -> ok.
+fail(Error) ->
+    gen_server:cast(?MODULE, {error, Error}).
+
+-spec stop() -> ok.
+stop() ->
+    gen_server:cast(?MODULE, done_comparing).
+
 -spec start(atomizer:package(), atomizer_cli_options:action()) -> true.
 start(Package, Action) ->
-    register(?PROCESS_NAME,
-             spawn_link(fun () ->
-                            atomizer_collect:start(Package),
-                            case Action of
-                                warn -> atomizer_compare:start();
-                                _    -> ignore
-                            end,
-                            case loop(#state{action = Action}) of
-                                {ok, Atoms, Stats} -> atomizer_cli:report(Atoms, Stats);
-                                {error, Error} -> atomizer_cli:fail(Error)
-                            end
-                        end)).
-
--type result(A) :: {ok, [A], atomizer:statistics()} | {error, atomizer:error()}.
-
--spec loop(#state{}) -> result(atomizer:loose_atom()).
-loop(State) ->
-    receive
-        {atom, Atom, File, Position} ->
-            case State#state.action of
-                warn -> atomizer_compare:atom(Atom);
-                _    -> ignore
-            end,
-            Atoms = add_atom_location(Atom, File, Position, State#state.atoms),
-            loop(State#state{atoms=Atoms});
-
-        {done_atoms, NrFiles, NrDirs} when State#state.action == warn ->
-            atomizer_compare:stop(),
-            loop(State#state{nr_parsed = {NrFiles, NrDirs}});
-
-        {done_atoms, NrFiles, NrDirs} ->
-            Atoms = State#state.atoms,
-            SortedAtoms = [{Atom, maps:get(Atom, Atoms)} || Atom <- lists:sort(maps:keys(Atoms))],
-            Stats = atomizer:statistics(_NrLooseAtoms = -1, _NrAtoms = length(SortedAtoms), NrFiles, NrDirs),
-            {ok, SortedAtoms, Stats};
-
-        {lookalikes, Atom, Lookalike} ->
-            Lookalikes = sets:add_element({Atom, Lookalike}, State#state.lookalikes),
-            loop(State#state{lookalikes = Lookalikes});
-
-        done_comparing ->
-            #state{atoms = Atoms, lookalikes = Lookalikes, nr_parsed = NrParsed} = State,
-            LooseAtoms = lists:filtermap(fun ({A, B}) ->
-                                             is_loose({A, maps:get(A, Atoms)}, {B, maps:get(B, Atoms)})
-                                         end,
-                                         sets:to_list(Lookalikes)),
-            NrAtoms = maps:size(Atoms),
-            NrLooseAtoms = length(LooseAtoms),
-            {NrFiles, NrDirs} = NrParsed,
-            Stats = atomizer:statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs),
-            {ok, lists:sort(LooseAtoms), Stats};
-
-        {error, Error} ->
-            case atomizer_cli_options:get_warn_errors() of
-                true ->
-                    atomizer:warning(Error),
-                    loop(State);
-                false ->
-                    {error, Error}
-            end
-    end.
+    gen_server:start({local, ?MODULE}, ?MODULE, [Package, Action], []).
 
 -spec add_atom_location(atom(), file:filename(), atomizer:position(), atomizer:atoms()) -> atomizer:atoms().
 add_atom_location(Atom, File, Position, Atoms) ->
