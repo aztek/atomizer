@@ -44,7 +44,7 @@ handle_cast({atom, Atom, File, Position}, State) ->
 
 handle_cast({done_atoms, NrFiles, NrDirs}, State) when State#state.action == warn ->
     atomizer_compare:stop(),
-    atomizer_spinner:show("Searching for loose atoms"),
+    atomizer_spinner:show("Searching for loose atoms (~p)"),
     {noreply, State#state{nr_parsed = {NrFiles, NrDirs}}};
 
 handle_cast({done_atoms, NrFiles, NrDirs}, State) ->
