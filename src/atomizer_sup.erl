@@ -36,6 +36,14 @@ stop() ->
     ?PROCESS_NAME ! done_comparing,
     ok.
 
+
+-record(state, {
+    action :: atomizer_cli_options:action(),
+    atoms      = maps:new() :: atomizer:atoms(),
+    lookalikes = sets:new() :: atomizer:lookalikes(),
+    nr_parsed  = {-1, -1}   :: {integer(), integer()}
+}).
+
 -spec start(atomizer:package(), atomizer_cli_options:action()) -> true.
 start(Package, Action) ->
     register(?PROCESS_NAME,
@@ -43,10 +51,7 @@ start(Package, Action) ->
                             atomizer_progress:start(),
                             atomizer_compare:start(),
                             atomizer_collect:start(Package),
-                            Result = case Action of
-                                         warn  -> find_loose_atoms_loop(maps:new(), sets:new(), {-1, -1});
-                                         _Show -> collect_atoms_loop(maps:new())
-                                     end,
+                            Result = loop(#state{action = Action}),
                             atomizer_progress:finish(),
                             case Result of
                                 {ok, Atoms, Stats} -> atomizer_cli:report(Atoms, Stats);
@@ -56,44 +61,35 @@ start(Package, Action) ->
 
 -type result(A) :: {ok, [A], atomizer:statistics()} | {error, atomizer:error()}.
 
--spec collect_atoms_loop(atomizer:atoms()) -> result(atomizer:atom_info()).
-collect_atoms_loop(Atoms) ->
+-spec loop(#state{}) -> result(atomizer:loose_atom()).
+loop(State) ->
     receive
         {atom, Atom, File, Position} ->
-            collect_atoms_loop(add_atom_location(Atom, File, Position, Atoms));
+            case State#state.action of
+                warn -> atomizer_compare:atom(Atom);
+                _    -> ignore
+            end,
+            Atoms = add_atom_location(Atom, File, Position, State#state.atoms),
+            loop(State#state{atoms=Atoms});
+
+        {done_atoms, NrFiles, NrDirs} when State#state.action == warn ->
+            atomizer_compare:stop(),
+            NrParsed = {NrFiles, NrDirs},
+            loop(State#state{nr_parsed = NrParsed});
 
         {done_atoms, NrFiles, NrDirs} ->
             atomizer_compare:stop(),
+            Atoms = State#state.atoms,
             SortedAtoms = [{Atom, maps:get(Atom, Atoms)} || Atom <- lists:sort(maps:keys(Atoms))],
             Stats = atomizer:statistics(_NrLooseAtoms = -1, _NrAtoms = length(SortedAtoms), NrFiles, NrDirs),
             {ok, SortedAtoms, Stats};
 
-        {error, Error} ->
-            case atomizer_cli_options:get_warn_errors() of
-                true ->
-                    atomizer:warning(Error),
-                    collect_atoms_loop(Atoms);
-                false ->
-                    {error, Error}
-            end
-    end.
-
--spec find_loose_atoms_loop(atomizer:atoms(), atomizer:lookalikes(), {integer(), integer()}) ->
-    result(atomizer:loose_atom()).
-find_loose_atoms_loop(Atoms, Lookalikes, NrParsed) ->
-    receive
-        {atom, Atom, File, Position} ->
-            atomizer_compare:atom(Atom),
-            find_loose_atoms_loop(add_atom_location(Atom, File, Position, Atoms), Lookalikes, NrParsed);
-
-        {done_atoms, NrFiles, NrDirs} ->
-            atomizer_compare:stop(),
-            find_loose_atoms_loop(Atoms, Lookalikes, {NrFiles, NrDirs});
-
         {lookalikes, Atom, Lookalike} ->
-            find_loose_atoms_loop(Atoms, sets:add_element({Atom, Lookalike}, Lookalikes), NrParsed);
+            Lookalikes = sets:add_element({Atom, Lookalike}, State#state.lookalikes),
+            loop(State#state{lookalikes = Lookalikes});
 
         done_comparing ->
+            #state{atoms = Atoms, lookalikes = Lookalikes, nr_parsed = NrParsed} = State,
             LooseAtoms = lists:filtermap(fun ({A, B}) ->
                                              is_loose({A, maps:get(A, Atoms)}, {B, maps:get(B, Atoms)})
                                          end,
@@ -108,7 +104,7 @@ find_loose_atoms_loop(Atoms, Lookalikes, NrParsed) ->
             case atomizer_cli_options:get_warn_errors() of
                 true ->
                     atomizer:warning(Error),
-                    find_loose_atoms_loop(Atoms, Lookalikes, NrParsed);
+                    loop(State);
                 false ->
                     {error, Error}
             end
