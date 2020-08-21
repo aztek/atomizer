@@ -23,6 +23,7 @@
 }).
 
 init([Package, Action]) ->
+    atomizer_spinner:start(),
     atomizer_collect:start(Package),
     case Action of
         warn -> atomizer_compare:start();
@@ -43,6 +44,7 @@ handle_cast({atom, Atom, File, Position}, State) ->
 
 handle_cast({done_atoms, NrFiles, NrDirs}, State) when State#state.action == warn ->
     atomizer_compare:stop(),
+    atomizer_spinner:show("Searching for loose atoms"),
     {noreply, State#state{nr_parsed = {NrFiles, NrDirs}}};
 
 handle_cast({done_atoms, NrFiles, NrDirs}, State) ->
@@ -57,6 +59,7 @@ handle_cast({lookalikes, Atom, Lookalike}, State) ->
     {noreply, State#state{lookalikes = Lookalikes}};
 
 handle_cast(done_comparing, State) ->
+    atomizer_spinner:hide(),
     #state{atoms = Atoms, lookalikes = Lookalikes, nr_parsed = NrParsed} = State,
     LooseAtoms = lists:filtermap(fun ({A, B}) ->
                                      is_loose({A, maps:get(A, Atoms)}, {B, maps:get(B, Atoms)})

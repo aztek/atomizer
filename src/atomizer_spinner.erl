@@ -4,8 +4,9 @@
 
 -export([
     start/0,
-    tick/1,
-    stop/0,
+    show/1,
+    tick/0,
+    hide/0,
 
     init/1,
     handle_call/3,
@@ -18,7 +19,8 @@
 -type phase() :: 0..3.
 
 -record(state, {
-    ticks       = 0 :: non_neg_integer() | stop,
+    banner      = undef :: string() | undef,
+    ticks       = 0 :: non_neg_integer(),
     last_phase  = 0 :: phase(),
     last_ticked = 0 :: integer()
 }).
@@ -26,13 +28,17 @@
 start() ->
     gen_server:start({local, ?MODULE}, ?MODULE, [], []).
 
--spec tick(string()) -> ok.
-tick(Format) ->
-    gen_server:cast(?MODULE, {tick, Format}).
+-spec show(string()) -> ok.
+show(Banner) ->
+    gen_server:cast(?MODULE, {show, Banner}).
 
--spec stop() -> ok.
-stop() ->
-    gen_server:cast(?MODULE, stop).
+-spec tick() -> ok.
+tick() ->
+    gen_server:cast(?MODULE, tick).
+
+-spec hide() -> ok.
+hide() ->
+    gen_server:cast(?MODULE, hide).
 
 init(_Args) ->
     {ok, #state{}}.
@@ -40,25 +46,28 @@ init(_Args) ->
 handle_call(_Request, _From, State) ->
     {noreply, State}.
 
-handle_cast({tick, _}, State) when State#state.ticks == stop ->
+handle_cast({show, Banner}, _) ->
+    {noreply, #state{banner = Banner}};
+
+handle_cast(tick, State) when State#state.banner == undef ->
     {noreply, State};
 
-handle_cast({tick, Format}, State) ->
-    #state{ticks=Ticks, last_phase=LastPhase, last_ticked=LastTicked} = State,
+handle_cast(tick, State) ->
+    #state{banner=Banner, ticks=Ticks, last_phase=LastPhase, last_ticked=LastTicked} = State,
     NowTicked = erlang:system_time(millisecond),
     case NowTicked - LastTicked >= ?TICK_INTERVAL of
         true ->
             NextPhase = (LastPhase + 1) rem length(?SPINNER_PHASES),
-            atomizer_output:set_progress(render_spinner(Ticks, NextPhase, Format)),
-            {noreply, #state{ticks = Ticks + 1, last_phase = NextPhase, last_ticked = NowTicked}};
+            atomizer_output:set_progress(render_spinner(Ticks, NextPhase, Banner)),
+            {noreply, #state{banner = Banner, ticks = Ticks + 1, last_phase = NextPhase, last_ticked = NowTicked}};
 
         false ->
             {noreply, State#state{ticks = Ticks + 1}}
     end;
 
-handle_cast(stop, State) ->
+handle_cast(hide, State) ->
     atomizer_output:hide_progress(),
-    {noreply, State#state{ticks=stop}}.
+    {noreply, State#state{banner=undef}}.
 
 -spec render_spinner(non_neg_integer(), phase(), string()) -> io_lib:chars().
 render_spinner(Ticks, Phase, Format) ->

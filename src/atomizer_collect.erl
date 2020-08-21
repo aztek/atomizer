@@ -7,7 +7,10 @@
 
 -export([
     start/1,
-    add_source/1
+    add_source/1,
+    done_dir/1,
+    done_file/1,
+    fail/1
 ]).
 
 -define(PROCESS_NAME, ?MODULE).
@@ -27,10 +30,22 @@ add_source(Source) ->
     ?PROCESS_NAME ! {add_source, Source},
     ok.
 
+done_dir(Dir) ->
+    ?PROCESS_NAME ! {done_dir, Dir},
+    ok.
+
+done_file(File) ->
+    ?PROCESS_NAME ! {done_file, File},
+    ok.
+
+fail(Error) ->
+    ?PROCESS_NAME ! {error, Error},
+    ok.
+
 -spec collect(atomizer:package()) ->
     {ok, NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()} | {error, atomizer:error()}.
 collect(Package) ->
-    atomizer_spinner:start(),
+    atomizer_spinner:show("Collecting files and directories (~p)"),
     case collect_sources(Package) of
         {ok, Sources} ->
             Pool  = ets:new(pool,  [private, set]),
@@ -41,7 +56,7 @@ collect(Package) ->
                           end, Sources),
             Result = case loop_dirs(_NrFiles = 0, _NrDirs = 0, Pool, Dirs, Files, Package) of
                          {ok, NrFiles, NrDirs} ->
-                             atomizer_spinner:stop(),
+                             atomizer_spinner:hide(),
                              atomizer_progress:start(_Elapsed = 0, NrFiles),
                              case loop_files(Pool, Files, Package) of
                                  ok -> {ok, NrFiles, NrDirs};
@@ -88,8 +103,8 @@ loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package) ->
             ets:delete(Dirs, Dir),
             spawn_link(fun () ->
                            case atomizer_traverse:traverse(Package, Dir) of
-                               ok    -> ?PROCESS_NAME ! {done_dir, Dir};
-                               Error -> ?PROCESS_NAME ! Error
+                               ok -> done_dir(Dir);
+                               {error, Error} -> fail(Error)
                            end
                        end),
             ets:insert(Pool, {Dir}),
@@ -135,8 +150,8 @@ loop_files(Pool, Files, Package) ->
             ets:delete(Files, File),
             spawn_link(fun () ->
                            case atomizer_parse:parse(Package, File) of
-                               ok    -> ?PROCESS_NAME ! {done_file, File};
-                               Error -> ?PROCESS_NAME ! Error
+                               ok -> done_file(File);
+                               {error, Error} -> fail(Error)
                            end
                        end),
             ets:insert(Pool, {File}),

@@ -48,7 +48,7 @@ traverse(Package, Dir) ->
 -spec detect_source(file:filename(), atomizer:package()) ->
     {ok, atomizer:source()} | ignore | {error, {?MODULE, error()}}.
 detect_source(Path, Package) ->
-    atomizer_spinner:tick("Collecting files and directories (~p)"),
+    atomizer_spinner:tick(),
     case resolve_real_path(Path, Package) of
         {ok, RealPath} ->
             Basename    = filename:basename(RealPath),

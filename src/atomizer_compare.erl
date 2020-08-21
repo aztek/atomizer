@@ -46,6 +46,7 @@ handle_cast({atom, Atom}, State = {Atoms, NFs}) ->
                           end,
                 atomizer_normalize:normalize(Atom))
     end,
+    atomizer_spinner:tick(),
     {noreply, State};
 
 handle_cast(done_atoms, State) ->
@@ -58,4 +59,3 @@ insignificant(Atom) ->
 terminate(_Reason, {Atoms, NFs}) ->
     ets:delete(NFs),
     ets:delete(Atoms).
-
