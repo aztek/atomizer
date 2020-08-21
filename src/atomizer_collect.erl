@@ -2,8 +2,8 @@
 
 -include_lib("kernel/include/file.hrl").
 
--define(OPEN_DIR_LIMIT, 4).
--define(OPEN_FILE_LIMIT, 4).
+-define(OPEN_DIR_LIMIT, 16).
+-define(OPEN_FILE_LIMIT, 16).
 
 -export([
     start/1,
