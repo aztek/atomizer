@@ -23,40 +23,32 @@
 traverse(Package, Dir) ->
     case file:list_dir(Dir) of
         {ok, Paths} ->
-            lists:foreach(fun (Path) -> traverse_path(Package, filename:join(Dir, Path)) end, Paths),
-            ok;
+            Collect = fun (_, {error, Error}) -> {error, Error};
+                          (Path, ok) ->
+                              case detect_source(Path, Package) of
+                                  {ok, Source} -> atomizer_collect:add_source(Source);
+                                  ignore -> ok;
+                                  {error, Error} ->
+                                      case atomizer_cli_options:get_warn_errors() of
+                                          true  -> atomizer:warning(Error);
+                                          false -> {error, Error}
+                                      end
+                              end
+                      end,
+            lists:foldl(Collect, ok, [filename:join(Dir, Path) || Path <- Paths]);
 
         {error, Error} ->
             ExtendedError = {?MODULE, {Dir, {file, Error}}},
             case atomizer_cli_options:get_warn_errors() of
-                true ->
-                    atomizer:warning(ExtendedError),
-                    ok;
-
-                false ->
-                    {error, ExtendedError}
-            end
-    end.
-
--spec traverse_path(atomizer:package(), file:filename()) ->
-    ignore | {add_source, atomizer:source()} | {error, error()}.
-traverse_path(Package, Path) ->
-    case detect_source(Path, Package) of
-        {ok, Source} -> atomizer_collect:add_source(Source);
-        ignore -> ignore;
-        {error, Error} ->
-            case atomizer_cli_options:get_warn_errors() of
-                true ->
-                    atomizer:warning(Error),
-                    ignore;
-                false ->
-                    {error, Error}
+                true  -> atomizer:warning(ExtendedError);
+                false -> {error, ExtendedError}
             end
     end.
 
 -spec detect_source(file:filename(), atomizer:package()) ->
     {ok, atomizer:source()} | ignore | {error, {?MODULE, error()}}.
 detect_source(Path, Package) ->
+    atomizer_spinner:tick("Collecting files and directories (~p)"),
     case resolve_real_path(Path, Package) of
         {ok, RealPath} ->
             Basename    = filename:basename(RealPath),

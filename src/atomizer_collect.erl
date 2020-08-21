@@ -61,9 +61,7 @@ collect_sources(Package) ->
     Collect = fun (_, {error, Error}) -> {error, Error};
                   (Path, {ok, Sources}) ->
                       case atomizer_traverse:detect_source(Path, Package) of
-                          {ok, Source} ->
-                              atomizer_spinner:tick("Collecting files and directories (~p)"),
-                              {ok, [Source | Sources]};
+                          {ok, Source} -> {ok, [Source | Sources]};
                           ignore -> {ok, Sources};
                           {error, Error} ->
                               case atomizer_cli_options:get_warn_errors() of
@@ -106,7 +104,6 @@ loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package) ->
                     case SkipSource of
                         true -> ok;
                         false ->
-                            atomizer_spinner:tick("Collecting files and directories (~p)"),
                             case Source of
                                 {dir, Dir} ->
                                     ets:insert(Dirs, {Dir}),
@@ -130,7 +127,8 @@ loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package) ->
 -spec loop_files(ets:tid(), ets:tid(), atomizer:package()) -> ok | {error, atomizer:error()}.
 loop_files(Pool, Files, Package) ->
     case {ets:info(Pool, size), ets:info(Files, size)} of
-        {0, 0} -> ok;
+        {0, 0} ->
+            atomizer_progress:stop();
 
         {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_FILE_LIMIT, QueueSize > 0 ->
             File = ets:first(Files),

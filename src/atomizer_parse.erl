@@ -18,11 +18,8 @@ parse(Package, File) ->
         ok -> ok;
         {error, Error} ->
             case atomizer_cli_options:get_warn_errors() of
-                true ->
-                    atomizer:warning(Error),
-                    ok;
-                false ->
-                    {error, Error}
+                true  -> atomizer:warning(Error);
+                false -> {error, Error}
             end
     end.
 

@@ -48,11 +48,12 @@ stop() ->
 start(Package, Action) ->
     register(?PROCESS_NAME,
              spawn_link(fun () ->
-                            atomizer_compare:start(),
                             atomizer_collect:start(Package),
-                            Result = loop(#state{action = Action}),
-                            atomizer_progress:stop(),
-                            case Result of
+                            case Action of
+                                warn -> atomizer_compare:start();
+                                _    -> ignore
+                            end,
+                            case loop(#state{action = Action}) of
                                 {ok, Atoms, Stats} -> atomizer_cli:report(Atoms, Stats);
                                 {error, Error} -> atomizer_cli:fail(Error)
                             end
@@ -73,11 +74,9 @@ loop(State) ->
 
         {done_atoms, NrFiles, NrDirs} when State#state.action == warn ->
             atomizer_compare:stop(),
-            NrParsed = {NrFiles, NrDirs},
-            loop(State#state{nr_parsed = NrParsed});
+            loop(State#state{nr_parsed = {NrFiles, NrDirs}});
 
         {done_atoms, NrFiles, NrDirs} ->
-            atomizer_compare:stop(),
             Atoms = State#state.atoms,
             SortedAtoms = [{Atom, maps:get(Atom, Atoms)} || Atom <- lists:sort(maps:keys(Atoms))],
             Stats = atomizer:statistics(_NrLooseAtoms = -1, _NrAtoms = length(SortedAtoms), NrFiles, NrDirs),
