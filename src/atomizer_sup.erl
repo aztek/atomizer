@@ -44,7 +44,6 @@ handle_cast({atom, Atom, File, Position}, State) ->
 
 handle_cast({done_atoms, NrFiles, NrDirs}, State) when State#state.action == warn ->
     atomizer_compare:stop(),
-    atomizer_spinner:show("Searching for loose atoms (~p)"),
     {noreply, State#state{nr_parsed = {NrFiles, NrDirs}}};
 
 handle_cast({done_atoms, NrFiles, NrDirs}, State) ->
@@ -89,6 +88,7 @@ lookalikes(Atom, Lookalike) ->
 
 -spec done_atoms(NrFiles :: non_neg_integer(), NrDirs :: non_neg_integer()) -> ok.
 done_atoms(NrFiles, NrDirs) ->
+    atomizer_spinner:show("Searching for loose atoms (~p)"),
     gen_server:cast(?MODULE, {done_atoms, NrFiles, NrDirs}).
 
 -spec fail(atomizer:error()) -> ok.
