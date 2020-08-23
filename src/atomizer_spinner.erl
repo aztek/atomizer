@@ -19,7 +19,7 @@
 -type phase() :: 0..3.
 
 -record(state, {
-    banner      = undef :: string() | undef,
+    banner          :: string() | undefined,
     ticks       = 0 :: non_neg_integer(),
     last_phase  = 0 :: phase(),
     last_ticked = 0 :: integer()
@@ -49,7 +49,7 @@ handle_call(_Request, _From, State) ->
 handle_cast({show, Banner}, _) ->
     {noreply, #state{banner = Banner}};
 
-handle_cast(tick, State) when State#state.banner == undef ->
+handle_cast(tick, State) when State#state.banner == undefined ->
     {noreply, State};
 
 handle_cast(tick, State) ->
@@ -67,7 +67,7 @@ handle_cast(tick, State) ->
 
 handle_cast(hide, State) ->
     atomizer_output:hide_progress(),
-    {noreply, State#state{banner=undef}}.
+    {noreply, State#state{banner=undefined}}.
 
 -spec render_spinner(non_neg_integer(), phase(), string()) -> io_lib:chars().
 render_spinner(Ticks, Phase, Format) ->

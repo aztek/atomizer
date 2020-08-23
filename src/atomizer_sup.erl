@@ -17,9 +17,9 @@
 
 -record(state, {
     action :: atomizer_cli_options:action(),
-    atoms      = maps:new() :: atomizer:atoms(),
+    atoms = maps:new() :: atomizer:atoms(),
     lookalikes = sets:new() :: atomizer:lookalikes(),
-    nr_parsed  = {-1, -1}   :: {integer(), integer()}
+    nr_parsed :: {integer(), integer()} | undefined
 }).
 
 init([Package, Action]) ->
