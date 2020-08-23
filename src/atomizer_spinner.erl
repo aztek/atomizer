@@ -65,9 +65,9 @@ handle_cast(tick, State) ->
             {noreply, State#state{ticks = Ticks + 1}}
     end;
 
-handle_cast(hide, State) ->
+handle_cast(hide, _) ->
     atomizer_output:hide_progress(),
-    {noreply, State#state{banner=undefined}}.
+    {noreply, #state{banner = undefined}}.
 
 -spec render_spinner(non_neg_integer(), phase(), string()) -> io_lib:chars().
 render_spinner(Ticks, Phase, Format) ->
