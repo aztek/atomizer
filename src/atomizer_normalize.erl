@@ -7,10 +7,10 @@
 -define(IS_DIGIT(C),       C >= $0, C =< $9).
 -define(IS_DELIMITER(C),   C == $_; C == $-).
 
--spec normalize(atom()) -> [atomizer:normal_form()].
+-spec normalize(atom()) -> {ok, atomizer:normal_form()} | nok.
 %% Normalize atom names spelled in camelCase, snake_case, SCREAMING_SNAKE_CASE, kebab-case and their combination.
 normalize(Atom) ->
     case string:lowercase([C || C <- atomizer:pretty_atom(Atom), C /= $_, C /= $-]) of
-        [] -> [];
-        NormalForm -> [list_to_atom(NormalForm)]
+        [] -> nok;
+        NormalForm -> {ok, list_to_atom(NormalForm)}
     end.
