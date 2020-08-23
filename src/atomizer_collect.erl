@@ -119,6 +119,7 @@ loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package) ->
                     case SkipSource of
                         true -> ok;
                         false ->
+                            atomizer_spinner:tick(),
                             case Source of
                                 {dir, Dir} ->
                                     ets:insert(Dirs, {Dir}),
