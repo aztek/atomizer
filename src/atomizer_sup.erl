@@ -99,7 +99,6 @@ fail(Error) ->
 stop() ->
     gen_server:cast(?MODULE, done_comparing).
 
--spec start(atomizer:package(), atomizer_cli_options:action()) -> true.
 start(Package, Action) ->
     gen_server:start({local, ?MODULE}, ?MODULE, [Package, Action], []).
 
