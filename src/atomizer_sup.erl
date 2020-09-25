@@ -122,7 +122,7 @@ is_loose({_, LocationsA} = A, {_, LocationsB} = B) ->
         end,
 
     Disproportion = 4,
-    Disproportional = Max / Min > Disproportion,
+    Disproportional = Max > Min * Disproportion,
 
     case Disproportional andalso local(Loose) andalso related(A, B) of
         true  -> {true, {Loose, Lookalike}};
@@ -135,6 +135,4 @@ local({_, Locations}) ->
 
 -spec related(atomizer:atom_info(), atomizer:atom_info()) -> boolean().
 related({_, LocationsA}, {_, LocationsB}) ->
-    FilesA = sets:from_list(maps:keys(LocationsA)),
-    FilesB = sets:from_list(maps:keys(LocationsB)),
-    not sets:is_disjoint(FilesA, FilesB).
+    lists:any(fun (File) -> maps:is_key(File, LocationsB) end, maps:keys(LocationsA)).
