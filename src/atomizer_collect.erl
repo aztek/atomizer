@@ -117,7 +117,7 @@ loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package) ->
                                  ets:member(Dirs, Source) orelse
                                  ets:member(Files, Source),
                     case SkipSource of
-                        true -> ok;
+                        true -> loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package);
                         false ->
                             atomizer_spinner:tick(),
                             case Source of
