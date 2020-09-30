@@ -48,9 +48,8 @@ handle_cast({done_atoms, NrFiles, NrDirs}, State) when State#state.action == war
 
 handle_cast({done_atoms, NrFiles, NrDirs}, State) ->
     Atoms = State#state.atoms,
-    SortedAtoms = [{Atom, maps:get(Atom, Atoms)} || Atom <- lists:sort(maps:keys(Atoms))],
-    Stats = atomizer:statistics(_NrLooseAtoms = undefined, _NrAtoms = length(SortedAtoms), NrFiles, NrDirs),
-    atomizer_cli:report(SortedAtoms, Stats),
+    Stats = atomizer:statistics(_NrLooseAtoms = undefined, _NrAtoms = maps:size(Atoms), NrFiles, NrDirs),
+    atomizer_cli:report(Atoms, Stats),
     {noreply, State};
 
 handle_cast({lookalikes, Atom, Lookalike}, State) ->
@@ -59,16 +58,15 @@ handle_cast({lookalikes, Atom, Lookalike}, State) ->
 
 handle_cast(done_comparing, State) ->
     atomizer_spinner:hide(),
-    #state{atoms = Atoms, lookalikes = Lookalikes, nr_parsed = NrParsed} = State,
+    #state{atoms = Atoms, lookalikes = Lookalikes, nr_parsed = {NrFiles, NrDirs}} = State,
     LooseAtoms = lists:filtermap(fun ({A, B}) ->
                                      is_loose({A, maps:get(A, Atoms)}, {B, maps:get(B, Atoms)})
                                  end,
                                  sets:to_list(Lookalikes)),
     NrAtoms = maps:size(Atoms),
     NrLooseAtoms = length(LooseAtoms),
-    {NrFiles, NrDirs} = NrParsed,
     Stats = atomizer:statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs),
-    atomizer_cli:report(lists:sort(LooseAtoms), Stats),
+    atomizer_cli:report(LooseAtoms, Stats),
     {noreply, State};
 
 handle_cast({error, Error}, State) ->

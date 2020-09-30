@@ -21,7 +21,7 @@ main(CmdArgs) ->
     atomizer_output:stop(),
     erlang:halt(ExitCode).
 
--spec report([atomizer:atom_info()] | [atomizer:loose_atom()], atomizer:statistics()) -> ok.
+-spec report(atomizer:atoms() | [atomizer:loose_atom()], atomizer:statistics()) -> ok.
 report(Atoms, Stats) ->
     ?PROCESS_NAME ! {ok, Atoms, Stats},
     ok.
@@ -72,9 +72,10 @@ run(CmdArgs) ->
             ExitCode
     end.
 
--spec list_atoms([atomizer:atom_info()], atomizer:statistics()) -> exit_code().
+-spec list_atoms(atomizer:atoms(), atomizer:statistics()) -> exit_code().
 list_atoms(Atoms, Stats) ->
-    lists:foreach(fun list_atom/1, Atoms),
+    lists:foreach(fun (Atom) -> list_atom(Atom, maps:get(Atom, Atoms)) end,
+                  lists:sort(maps:keys(Atoms))),
     Verbosity = atomizer_cli_options:get_verbosity(),
     if
         Verbosity > 1 -> show_statistics(Stats);
@@ -82,8 +83,8 @@ list_atoms(Atoms, Stats) ->
     end,
     ?EXIT_CODE_SUCCESS.
 
--spec list_atom(atomizer:atom_info()) -> ok.
-list_atom({Atom, Locations}) ->
+-spec list_atom(atom(), atomizer:locations()) -> ok.
+list_atom(Atom, Locations) ->
     Verbosity = atomizer_cli_options:get_verbosity(),
     NrOccurrences = atomizer:nr_occurrences(Locations),
     NrFiles = atomizer:nr_files(Locations),
@@ -91,9 +92,10 @@ list_atom({Atom, Locations}) ->
               [integer_to_list(NrFiles) || Verbosity == 2],
     atomizer:print(lists:join("\t", Columns)).
 
--spec show_atoms([atomizer:atom_info()], atomizer:statistics()) -> exit_code().
+-spec show_atoms(atomizer:atoms(), atomizer:statistics()) -> exit_code().
 show_atoms(Atoms, Stats) ->
-    lists:foreach(fun show_atom/1, Atoms),
+    lists:foreach(fun (Atom) -> show_atom({Atom, maps:get(Atom, Atoms)}) end,
+                  lists:sort(maps:keys(Atoms))),
     Verbosity = atomizer_cli_options:get_verbosity(),
     if
         Verbosity > 1 -> show_statistics(Stats);
@@ -142,7 +144,7 @@ show_position({Line, Column}) ->
 
 -spec show_loose_atoms([atomizer:loose_atom()], atomizer:statistics()) -> exit_code().
 show_loose_atoms(LooseAtoms, Stats) ->
-    lists:foreach(fun show_loose_atom/1, LooseAtoms),
+    lists:foreach(fun show_loose_atom/1, lists:sort(LooseAtoms)),
     show_statistics(Stats),
     case LooseAtoms of
         [] -> ?EXIT_CODE_SUCCESS;
