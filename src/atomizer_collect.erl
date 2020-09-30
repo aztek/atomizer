@@ -48,17 +48,16 @@ collect(Package) ->
     atomizer_spinner:show("Collecting files and directories (~p)"),
     case collect_sources(Package) of
         {ok, Sources} ->
-            Pool  = ets:new(pool,  [private, set]),
             Files = ets:new(files, [private, set]),
             Dirs  = ets:new(dirs,  [private, set]),
             lists:foreach(fun ({dir, Dir}) -> ets:insert(Dirs, {Dir});
                               (File) -> ets:insert(Files, {File})
                           end, Sources),
-            Result = case loop_dirs(_NrFiles = 0, _NrDirs = 0, Pool, Dirs, Files, Package) of
+            Result = case loop_dirs(Dirs, Files, Package) of
                          {ok, NrFiles, NrDirs} ->
                              atomizer_spinner:hide(),
                              atomizer_progress:start(_Elapsed = 0, NrFiles),
-                             case loop_files(Pool, Files, Package) of
+                             case loop_files(Files, Package) of
                                  ok -> {ok, NrFiles, NrDirs};
                                  {error, Error} -> {error, Error}
                              end;
@@ -66,7 +65,6 @@ collect(Package) ->
                      end,
             ets:delete(Dirs),
             ets:delete(Files),
-            ets:delete(Pool),
             Result;
         {error, Error} -> {error, Error}
     end.
@@ -89,6 +87,16 @@ collect_sources(Package) ->
                       end
               end,
     lists:foldl(Collect, {ok, []}, atomizer:package_paths(Package)).
+
+-spec loop_dirs(ets:tid(), ets:tid(), atomizer:package()) ->
+    {ok, NrFiles, NrDirs} | {error, atomizer:error()} when
+    NrDirs  :: non_neg_integer(),
+    NrFiles :: non_neg_integer().
+loop_dirs(Dirs, Files, Package) ->
+    Pool = ets:new(pool, [private, set]),
+    Result = loop_dirs(_NrFiles = 0, _NrDirs = 0, Pool, Dirs, Files, Package),
+    ets:delete(Pool),
+    Result.
 
 -spec loop_dirs(NrFiles, NrDirs, ets:tid(), ets:tid(), ets:tid(), atomizer:package()) ->
     {ok, NrFiles, NrDirs} | {error, atomizer:error()} when
@@ -140,11 +148,18 @@ loop_dirs(NrFiles, NrDirs, Pool, Dirs, Files, Package) ->
             end
     end.
 
+-spec loop_files(ets:tid(), atomizer:package()) -> ok | {error, atomizer:error()}.
+loop_files(Files, Package) ->
+    Pool = ets:new(pool, [private, set]),
+    Result = loop_files(Pool, Files, Package),
+    atomizer_progress:stop(),
+    ets:delete(Pool),
+    Result.
+
 -spec loop_files(ets:tid(), ets:tid(), atomizer:package()) -> ok | {error, atomizer:error()}.
 loop_files(Pool, Files, Package) ->
     case {ets:info(Pool, size), ets:info(Files, size)} of
-        {0, 0} ->
-            atomizer_progress:stop();
+        {0, 0} -> ok;
 
         {NrTakenDescriptors, QueueSize} when NrTakenDescriptors < ?OPEN_FILE_LIMIT, QueueSize > 0 ->
             File = ets:first(Files),
