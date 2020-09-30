@@ -9,6 +9,9 @@
 -define(PROCESS_NAME, ?MODULE).
 
 -type exit_code() :: non_neg_integer().
+-define(EXIT_CODE_SUCCESS, 0).
+-define(EXIT_CODE_LOOSE_ATOMS_FOUND, 1).
+-define(EXIT_CODE_FAILURE, 2).
 
 -spec main([string()]) -> no_return().
 main(CmdArgs) ->
@@ -44,7 +47,7 @@ cli(CmdArgs) ->
 
         {message, Message} ->
             atomizer:print(Message),
-            quit(_OK = 0);
+            quit(?EXIT_CODE_SUCCESS);
 
         {error, Error} ->
             fail(Error)
@@ -63,7 +66,7 @@ run(CmdArgs) ->
 
         {error, Error} ->
             atomizer:error(Error),
-            _ExitCode = 2;
+            ?EXIT_CODE_FAILURE;
 
         {quit, ExitCode} ->
             ExitCode
@@ -77,7 +80,7 @@ list_atoms(Atoms, Stats) ->
         Verbosity > 1 -> show_statistics(Stats);
         true -> ok
     end,
-    _ExitCode = 0.
+    ?EXIT_CODE_SUCCESS.
 
 -spec list_atom(atomizer:atom_info()) -> ok.
 list_atom({Atom, Locations}) ->
@@ -96,9 +99,9 @@ show_atoms(Atoms, Stats) ->
         Verbosity > 1 -> show_statistics(Stats);
         true -> ok
     end,
-    _ExitCode = 0.
+    ?EXIT_CODE_SUCCESS.
 
--spec show_abridged_list(fun ((A) -> any()), [A]) -> {ok, exit_code()} when A :: term().
+-spec show_abridged_list(fun ((A) -> any()), [A]) -> ok when A :: term().
 show_abridged_list(Printer, List) ->
     Verbosity = atomizer_cli_options:get_verbosity(),
     PreviewLength = 4,
@@ -108,8 +111,7 @@ show_abridged_list(Printer, List) ->
             atomizer:print(["... ", atomizer_color:cyan(["(", integer_to_list(ListLength - PreviewLength), " more)"])]);
         _ ->
             lists:foreach(Printer, List)
-    end,
-    {ok, 0}.
+    end.
 
 -spec show_locations(atomizer:locations()) -> ok.
 show_locations(Locations) ->
@@ -120,7 +122,7 @@ show_locations(Locations) ->
     show_abridged_list(ShowLocation, Files),
     atomizer:nl().
 
--spec show_location(file:filename(), [atomizer:position()], non_neg_integer()) -> {ok, exit_code()}.
+-spec show_location(file:filename(), [atomizer:position()], non_neg_integer()) -> ok.
 show_location(File, Positions, NrPositions) ->
     case atomizer_cli_options:get_verbosity() of
         0 ->
@@ -129,8 +131,7 @@ show_location(File, Positions, NrPositions) ->
         _ ->
             ShowPosition = fun (Position) -> atomizer:print([File, ":" | show_position(Position)]) end,
             show_abridged_list(ShowPosition, Positions)
-    end,
-    {ok, 0}.
+    end.
 
 -spec show_position(atomizer:position()) -> io_lib:chars().
 show_position(Line) when is_integer(Line) ->
@@ -144,8 +145,8 @@ show_loose_atoms(LooseAtoms, Stats) ->
     lists:foreach(fun show_loose_atom/1, LooseAtoms),
     show_statistics(Stats),
     case LooseAtoms of
-        [] -> 0;
-        _  -> 1
+        [] -> ?EXIT_CODE_SUCCESS;
+        _  -> ?EXIT_CODE_LOOSE_ATOMS_FOUND
     end.
 
 -spec show_statistics(atomizer:statistics()) -> ok.
