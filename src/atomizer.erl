@@ -98,14 +98,14 @@ package_parse_beams(#package{parse_beams = ParseBeams}) -> ParseBeams.
 %%% Statistics
 
 -record(statistics, {
-    nr_loose_atoms :: non_neg_integer() | -1,
+    nr_loose_atoms :: non_neg_integer() | undefined,
     nr_atoms       :: non_neg_integer(),
     nr_files       :: non_neg_integer(),
     nr_dirs        :: non_neg_integer()
 }).
 -opaque statistics() :: #statistics{}.
 
--spec statistics(non_neg_integer() | -1, non_neg_integer(), non_neg_integer(), non_neg_integer()) -> statistics().
+-spec statistics(non_neg_integer() | undefined, non_neg_integer(), non_neg_integer(), non_neg_integer()) -> statistics().
 statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs) ->
     #statistics{
         nr_loose_atoms = NrLooseAtoms,
@@ -114,7 +114,7 @@ statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs) ->
         nr_dirs        = NrDirs
     }.
 
--spec get_nr_loose_atoms(statistics()) -> non_neg_integer() | -1.
+-spec get_nr_loose_atoms(statistics()) -> non_neg_integer() | undefined.
 get_nr_loose_atoms(#statistics{nr_loose_atoms = NrLooseAtoms}) -> NrLooseAtoms.
 
 -spec get_nr_atoms(statistics()) -> non_neg_integer().

@@ -49,7 +49,7 @@ handle_cast({done_atoms, NrFiles, NrDirs}, State) when State#state.action == war
 handle_cast({done_atoms, NrFiles, NrDirs}, State) ->
     Atoms = State#state.atoms,
     SortedAtoms = [{Atom, maps:get(Atom, Atoms)} || Atom <- lists:sort(maps:keys(Atoms))],
-    Stats = atomizer:statistics(_NrLooseAtoms = -1, _NrAtoms = length(SortedAtoms), NrFiles, NrDirs),
+    Stats = atomizer:statistics(_NrLooseAtoms = undefined, _NrAtoms = length(SortedAtoms), NrFiles, NrDirs),
     atomizer_cli:report(SortedAtoms, Stats),
     {noreply, State};
 
