@@ -19,7 +19,8 @@
     action :: atomizer_cli_options:action(),
     atoms = maps:new() :: atomizer:atoms(),
     lookalikes = sets:new() :: atomizer:lookalikes(),
-    nr_parsed :: {integer(), integer()} | undefined
+    nr_dirs :: integer() | undefined,
+    nr_files :: integer() | undefined
 }).
 
 init([Package, Action]) ->
@@ -44,7 +45,7 @@ handle_cast({atom, Atom, File, Position}, State) ->
 
 handle_cast({done_atoms, NrFiles, NrDirs}, State) when State#state.action == warn ->
     atomizer_compare:stop(),
-    {noreply, State#state{nr_parsed = {NrFiles, NrDirs}}};
+    {noreply, State#state{nr_files = NrFiles, nr_dirs = NrDirs}};
 
 handle_cast({done_atoms, NrFiles, NrDirs}, State) ->
     Atoms = State#state.atoms,
@@ -58,7 +59,7 @@ handle_cast({lookalikes, Atom, Lookalike}, State) ->
 
 handle_cast(done_comparing, State) ->
     atomizer_spinner:hide(),
-    #state{atoms = Atoms, lookalikes = Lookalikes, nr_parsed = {NrFiles, NrDirs}} = State,
+    #state{atoms = Atoms, lookalikes = Lookalikes, nr_files = NrFiles, nr_dirs = NrDirs} = State,
     LooseAtoms = lists:filtermap(fun ({A, B}) ->
                                      is_loose({A, maps:get(A, Atoms)}, {B, maps:get(B, Atoms)})
                                  end,
