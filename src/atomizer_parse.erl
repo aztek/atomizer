@@ -21,24 +21,20 @@
     queue :: [atomizer:file()]
 }).
 
--spec start_link([file:filename()], atomizer:package()) -> true.
+-spec start_link([file:filename()], atomizer:package()) -> pid().
 start_link(Files, Package) ->
-    register(?PROCESS_NAME, spawn_link(fun () -> loop(#state{package = Package, queue = Files}) end)).
-
--spec done_file(file:filename()) -> ok.
-done_file(File) ->
-    ?PROCESS_NAME ! {done_file, File},
-    ok.
+    spawn_link(fun () -> loop(#state{package = Package, queue = Files}) end).
 
 -spec loop(#state{}) -> ok.
 loop(#state{pool = Pool, queue = Queue} = State) ->
     case {sets:size(Pool), Queue} of
-        {0, []} -> atomizer_sup:done_atoms();
+        {0, []} -> ok;
 
         {NrTakenDescriptors, [File | RestQueue]} when NrTakenDescriptors < ?OPEN_FILE_LIMIT ->
+            Parent = self(),
             spawn_link(fun () ->
                            case parse(State#state.package, File) of
-                               ok -> done_file(File);
+                               ok -> Parent ! {done_file, File};
                                {error, Error} -> erlang:exit({error, Error})
                            end
                        end),

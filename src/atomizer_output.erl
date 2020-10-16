@@ -11,7 +11,8 @@
 
     init/1,
     handle_call/3,
-    handle_cast/2
+    handle_cast/2,
+    terminate/2
 ]).
 
 init(_Args) ->
@@ -36,6 +37,9 @@ handle_cast({set_progress, ProgressBar}, LastShownProgressBar) ->
 handle_cast(hide_progress, LastShownProgressBar) ->
     erase_progress_bar(LastShownProgressBar),
     {noreply, ""}.
+
+terminate(_Reason, LastShownProgressBar) ->
+    erase_progress_bar(LastShownProgressBar).
 
 
 start_link() ->

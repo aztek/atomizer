@@ -7,10 +7,8 @@
     file/1,
     done_dir/1,
     done_file/1,
-    done_files/0,
     atom/3,
     lookalikes/2,
-    done_atoms/0,
     stop/0,
 
     init/1,
@@ -26,7 +24,9 @@
     atoms = maps:new() :: atomizer:atoms(),
     lookalikes = sets:new() :: atomizer:lookalikes(),
     nr_dirs = 0 :: integer(),
-    nr_files = 0 :: integer()
+    nr_files = 0 :: integer(),
+    atomizer_traverse :: pid() | undefined,
+    atomizer_parse :: pid() | undefined
 }).
 
 init([Package, Action]) ->
@@ -36,12 +36,13 @@ init([Package, Action]) ->
     Paths = atomizer:package_paths(Package),
     case atomizer_traverse:detect_sources(Paths, Package) of
         {ok, Files, Dirs} ->
-            atomizer_traverse:start_link(Dirs, Package),
-            case Action of
-                warn -> atomizer_compare:start_link();
-                _    -> ignore
-            end,
-            {ok, #state{package = Package, action = Action, files = sets:from_list(Files)}};
+            State = #state{
+                package = Package,
+                action = Action,
+                files = sets:from_list(Files),
+                atomizer_traverse = atomizer_traverse:start_link(Dirs, Package)
+            },
+            {ok, State};
 
         {error, Error} ->
             {stop, {shutdown, {error, Error}}}
@@ -59,11 +60,6 @@ handle_cast({done_dir, _Dir}, State) ->
 handle_cast({done_file, _File}, State) ->
     {noreply, State#state{nr_files = State#state.nr_files + 1}};
 
-handle_cast(done_traversing, #state{files = Files, package = Package} = State) ->
-    atomizer_progress:start_link(_Elapsed = 0, _Total = sets:size(Files)),
-    atomizer_parse:start_link(sets:to_list(Files), Package),
-    {noreply, State};
-
 handle_cast({atom, Atom, File, Position}, State) ->
     case State#state.action of
         warn -> atomizer_compare:atom(Atom);
@@ -71,15 +67,6 @@ handle_cast({atom, Atom, File, Position}, State) ->
     end,
     Atoms = add_atom_location(Atom, File, Position, State#state.atoms),
     {noreply, State#state{atoms = Atoms}};
-
-handle_cast(done_atoms, State) when State#state.action == warn ->
-    atomizer_progress:stop(),
-    atomizer_compare:stop(),
-    {noreply, State};
-
-handle_cast(done_atoms, #state{atoms = Atoms, nr_dirs = NrDirs, nr_files = NrFiles} = State) ->
-    Stats = atomizer:statistics(_NrLooseAtoms = undefined, _NrAtoms = maps:size(Atoms), NrFiles, NrDirs),
-    {stop, {shutdown, {ok, Atoms, Stats}}, State};
 
 handle_cast({lookalikes, Atom, Lookalike}, State) ->
     Lookalikes = sets:add_element({Atom, Lookalike}, State#state.lookalikes),
@@ -100,11 +87,37 @@ handle_cast(done_comparing, State) ->
 handle_info({'EXIT', _Pid, {error, Error}}, State) ->
     {stop, {shutdown, {error, Error}}, State};
 
+handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_traverse ->
+    #state{files = Files, package = Package} = State,
+    atomizer_spinner:hide(),
+    atomizer_progress:start_link(_Elapsed = 0, _Total = sets:size(Files)),
+    case State#state.action of
+        warn -> atomizer_compare:start_link();
+        _    -> ignore
+    end,
+    NextState = State#state{
+        atomizer_traverse = undefined,
+        atomizer_parse = atomizer_parse:start_link(sets:to_list(Files), Package)
+    },
+    {noreply, NextState};
+
+handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse ->
+    atomizer_progress:stop(),
+    case State#state.action of
+        warn ->
+            atomizer_spinner:show("Searching for loose atoms (~p)"),
+            atomizer_compare:stop(),
+            {noreply, State#state{atomizer_parse = undefined}};
+        _ ->
+            #state{atoms = Atoms, nr_dirs = NrDirs, nr_files = NrFiles} = State,
+            Stats = atomizer:statistics(_NrLooseAtoms = undefined, _NrAtoms = maps:size(Atoms), NrFiles, NrDirs),
+            {stop, {shutdown, {ok, Atoms, Stats}}, State#state{atomizer_parse = undefined}}
+    end;
+
 handle_info({'EXIT', _Pid, normal}, State) ->
     {noreply, State}.
 
 file(File) ->
-    atomizer_spinner:tick(),
     gen_server:cast(?MODULE, {file, File}).
 
 done_dir(Dir) ->
@@ -115,10 +128,6 @@ done_file(File) ->
     atomizer_progress:progress(1),
     gen_server:cast(?MODULE, {done_file, File}).
 
-done_files() ->
-    atomizer_spinner:hide(),
-    gen_server:cast(?MODULE, done_traversing).
-
 -spec atom(atom(), file:filename(), atomizer:position()) -> ok.
 atom(Atom, File, Position) ->
     gen_server:cast(?MODULE, {atom, Atom, File, Position}).
@@ -126,11 +135,6 @@ atom(Atom, File, Position) ->
 -spec lookalikes(atom(), atom()) -> ok.
 lookalikes(Atom, Lookalike) ->
     gen_server:cast(?MODULE, {lookalikes, Atom, Lookalike}).
-
--spec done_atoms() -> ok.
-done_atoms() ->
-    atomizer_spinner:show("Searching for loose atoms (~p)"),
-    gen_server:cast(?MODULE, done_atoms).
 
 -spec stop() -> ok.
 stop() ->

@@ -28,9 +28,11 @@
     queue :: [file:filename()]
 }).
 
--spec start_link([file:filename()], atomizer:package()) -> true.
+-spec start_link([file:filename()], atomizer:package()) -> pid().
 start_link(Dirs, Package) ->
-    register(?PROCESS_NAME, spawn_link(fun () -> loop(#state{package = Package, queue = Dirs}) end)).
+    Pid = spawn_link(fun () -> loop(#state{package = Package, queue = Dirs}) end),
+    register(?PROCESS_NAME, Pid),
+    Pid.
 
 -spec add_dir(file:filename()) -> ok.
 add_dir(Dir) ->
@@ -45,7 +47,7 @@ done_dir(Dir) ->
 -spec loop(#state{}) -> ok.
 loop(#state{pool = Pool, queue = Queue} = State) ->
     case {sets:size(Pool), Queue} of
-        {0, []} -> atomizer_sup:done_files();
+        {0, []} -> ok;
 
         {NrTakenDescriptors, [Dir | RestQueue]} when NrTakenDescriptors < ?OPEN_DIR_LIMIT ->
             spawn_link(fun () ->
