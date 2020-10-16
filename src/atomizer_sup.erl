@@ -34,8 +34,7 @@ init([Package, Action]) ->
     atomizer_spinner:show("Collecting files and directories (~p)"),
     Paths = atomizer:package_paths(Package),
     case atomizer_traverse:detect_sources(Paths, Package) of
-        {ok, Sources} ->
-            {Files, Dirs} = split_sources(Sources),
+        {ok, Files, Dirs} ->
             atomizer_traverse:start(Dirs, Package),
             case Action of
                 warn -> atomizer_compare:start();
@@ -45,14 +44,6 @@ init([Package, Action]) ->
 
         {error, Error} ->
             {stop, Error}
-    end.
-
-split_sources([]) -> {[], []};
-split_sources([Source | Sources]) ->
-    {Files, Dirs} = split_sources(Sources),
-    case Source of
-        {dir, Dir} -> {Files, [Dir | Dirs]};
-        File -> {[File | Files], Dirs}
     end.
 
 handle_call(_Request, _From, State) ->

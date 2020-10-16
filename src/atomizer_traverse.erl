@@ -75,10 +75,9 @@ traverse(Package, Dir) ->
     case list_dir(Dir) of
         {ok, Paths} ->
             case detect_sources(Paths, Package) of
-                {ok, Sources} ->
-                    lists:foreach(fun ({dir, Dir_}) -> add_dir(Dir_);
-                                      (File) -> atomizer_sup:file(File)
-                                  end, Sources);
+                {ok, Files, Dirs} ->
+                    lists:foreach(fun atomizer_sup:file/1, Files),
+                    lists:foreach(fun add_dir/1, Dirs);
                 {error, Error} -> {error, Error}
             end;
 
@@ -99,25 +98,26 @@ list_dir(Dir) ->
             end
     end.
 
--spec detect_sources([file:filename()], atomizer:package()) ->
-    {ok, [atomizer:source()]} | {error, atomizer:error()}.
+-spec detect_sources(Paths :: [file:filename()], atomizer:package()) ->
+    {ok, Files :: [atomizer:file()], Dirs :: [file:filename()]} | {error, atomizer:error()}.
 detect_sources(Paths, Package) ->
     Collect = fun (_, {error, Error}) -> {error, Error};
-                  (Path, {ok, Sources}) ->
+                  (Path, {ok, Files, Dirs}) ->
                       case detect_source(Path, Package) of
-                          {ok, Source} -> {ok, [Source | Sources]};
-                          ignore -> {ok, Sources};
+                          {ok, {dir, Dir}} -> {ok, Files, [Dir | Dirs]};
+                          {ok, File} -> {ok, [File | Files], Dirs};
+                          ignore -> {ok, Files, Dirs};
                           {error, Error} ->
                               case atomizer_cli_options:get_warn_errors() of
                                   true ->
                                       atomizer:warning(Error),
-                                      {ok, Sources};
+                                      {ok, Files, Dirs};
                                   false ->
                                       {error, Error}
                               end
                       end
               end,
-    lists:foldl(Collect, {ok, []}, Paths).
+    lists:foldl(Collect, {ok, [], []}, Paths).
 
 -spec detect_source(file:filename(), atomizer:package()) ->
     {ok, atomizer:source()} | ignore | {error, {?MODULE, error()}}.
