@@ -3,7 +3,7 @@
 -behavior(gen_server).
 
 -export([
-    start/0,
+    start_link/0,
     atom/1,
     stop/0,
 
@@ -13,8 +13,8 @@
     terminate/2
 ]).
 
-start() ->
-    gen_server:start({local, ?MODULE}, ?MODULE, [], []).
+start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 atom(Atom) ->
     gen_server:cast(?MODULE, {atom, Atom}).

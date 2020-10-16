@@ -3,7 +3,7 @@
 -behavior(gen_server).
 
 -export([
-    start/0,
+    start_link/0,
     put_chars/2,
     set_progress/1,
     hide_progress/0,
@@ -38,8 +38,8 @@ handle_cast(hide_progress, LastShownProgressBar) ->
     {noreply, ""}.
 
 
-start() ->
-    gen_server:start({local, ?MODULE}, ?MODULE, [], []).
+start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 -spec put_chars(io:device(), io_lib:chars()) -> ok.
 put_chars(IoDevice, Message) ->

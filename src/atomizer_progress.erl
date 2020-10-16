@@ -3,7 +3,7 @@
 -behavior(gen_server).
 
 -export([
-    start/2,
+    start_link/2,
     progress/1,
     stop/0,
 
@@ -23,8 +23,8 @@
     last_shown_progress = 0 :: progress()
 }).
 
-start(Elapsed, Total) ->
-    gen_server:start({local, ?MODULE}, ?MODULE, [Elapsed, Total], []).
+start_link(Elapsed, Total) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [Elapsed, Total], []).
 
 -spec progress(non_neg_integer()) -> ok.
 progress(Delta) ->

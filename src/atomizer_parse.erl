@@ -1,7 +1,7 @@
 -module(atomizer_parse).
 
 -export([
-    start/2,
+    start_link/2,
     format_error/1
 ]).
 
@@ -21,8 +21,8 @@
     queue :: [atomizer:file()]
 }).
 
--spec start([file:filename()], atomizer:package()) -> true.
-start(Files, Package) ->
+-spec start_link([file:filename()], atomizer:package()) -> true.
+start_link(Files, Package) ->
     register(?PROCESS_NAME, spawn_link(fun () -> loop(#state{package = Package, queue = Files}) end)).
 
 -spec done_file(file:filename()) -> ok.
@@ -39,7 +39,7 @@ loop(#state{pool = Pool, queue = Queue} = State) ->
             spawn_link(fun () ->
                            case parse(State#state.package, File) of
                                ok -> done_file(File);
-                               {error, Error} -> atomizer_sup:fail(Error)
+                               {error, Error} -> erlang:exit({error, Error})
                            end
                        end),
             loop(State#state{pool = sets:add_element(File, Pool), queue = RestQueue});

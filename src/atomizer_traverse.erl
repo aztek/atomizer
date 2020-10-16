@@ -8,7 +8,7 @@
 -define(BEAM_EXTENSIONS, [".beam"]).
 
 -export([
-    start/2,
+    start_link/2,
     detect_sources/2,
     format_error/1
 ]).
@@ -28,8 +28,8 @@
     queue :: [file:filename()]
 }).
 
--spec start([file:filename()], atomizer:package()) -> true.
-start(Dirs, Package) ->
+-spec start_link([file:filename()], atomizer:package()) -> true.
+start_link(Dirs, Package) ->
     register(?PROCESS_NAME, spawn_link(fun () -> loop(#state{package = Package, queue = Dirs}) end)).
 
 -spec add_dir(file:filename()) -> ok.
@@ -51,7 +51,7 @@ loop(#state{pool = Pool, queue = Queue} = State) ->
             spawn_link(fun () ->
                            case traverse(State#state.package, Dir) of
                                ok -> done_dir(Dir);
-                               {error, Error} -> atomizer_sup:fail(Error)
+                               {error, Error} -> erlang:exit({error, Error})
                            end
                        end),
             loop(State#state{pool = sets:add_element(Dir, Pool), queue = RestQueue});

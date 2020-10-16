@@ -1,9 +1,7 @@
 -module(atomizer_cli).
 
 -export([
-    main/1,
-    report/2,
-    fail/1
+    main/1
 ]).
 
 -define(PROCESS_NAME, ?MODULE).
@@ -15,21 +13,12 @@
 
 -spec main([string()]) -> no_return().
 main(CmdArgs) ->
+    process_flag(trap_exit, true),
     register(?PROCESS_NAME, self()),
-    atomizer_output:start(),
+    atomizer_output:start_link(),
     ExitCode = run(CmdArgs),
     atomizer_output:stop(),
     erlang:halt(ExitCode).
-
--spec report(atomizer:atoms() | [atomizer:loose_atom()], atomizer:statistics()) -> ok.
-report(Atoms, Stats) ->
-    ?PROCESS_NAME ! {ok, Atoms, Stats},
-    ok.
-
--spec fail(atomizer:error()) -> ok.
-fail(Error) ->
-    ?PROCESS_NAME ! {error, Error},
-    ok.
 
 -spec quit(exit_code()) -> ok.
 quit(ExitCode) ->
@@ -43,33 +32,34 @@ cli(CmdArgs) ->
             Package = atomizer_cli_options:package(Options),
             atomizer_cli_options:init(Options),
             Action = atomizer_cli_options:get_action(),
-            atomizer_sup:start(Package, Action);
+            atomizer_sup:start_link(Package, Action);
 
         {message, Message} ->
             atomizer:print(Message),
             quit(?EXIT_CODE_SUCCESS);
 
         {error, Error} ->
-            fail(Error)
+            atomizer:error(Error),
+            quit(?EXIT_CODE_FAILURE)
     end.
 
 -spec run([string()]) -> exit_code().
 run(CmdArgs) ->
     cli(CmdArgs),
     receive
-        {ok, Atoms, Stats} ->
+        {quit, ExitCode} ->
+            ExitCode;
+
+        {'EXIT', _Pid, {shutdown, {ok, Atoms, Stats}}} ->
             case atomizer_cli_options:get_action() of
                 list -> list_atoms(Atoms, Stats);
                 show -> show_atoms(Atoms, Stats);
                 warn -> show_loose_atoms(Atoms, Stats)
             end;
 
-        {error, Error} ->
+        {'EXIT', _Pid, {shutdown, {error, Error}}} ->
             atomizer:error(Error),
-            ?EXIT_CODE_FAILURE;
-
-        {quit, ExitCode} ->
-            ExitCode
+            ?EXIT_CODE_FAILURE
     end.
 
 -spec list_atoms(atomizer:atoms(), atomizer:statistics()) -> exit_code().

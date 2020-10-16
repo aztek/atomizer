@@ -154,7 +154,8 @@ global_ignores() ->
                | {atomizer_traverse,    atomizer_traverse:error()}.
 
 -spec format_error(error()) -> io_lib:chars().
-format_error({Module, Error}) -> Module:format_error(Error).
+format_error({Module, Error}) -> Module:format_error(Error);
+format_error(MalformedError) -> io_lib:format("Unexpected error ~p", [MalformedError]).
 
 
 %%% Printing to standard outputs

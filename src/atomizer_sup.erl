@@ -3,7 +3,7 @@
 -behavior(gen_server).
 
 -export([
-    start/2,
+    start_link/2,
     file/1,
     done_dir/1,
     done_file/1,
@@ -11,12 +11,12 @@
     atom/3,
     lookalikes/2,
     done_atoms/0,
-    fail/1,
     stop/0,
 
     init/1,
     handle_call/3,
-    handle_cast/2
+    handle_cast/2,
+    handle_info/2
 ]).
 
 -record(state, {
@@ -30,20 +30,21 @@
 }).
 
 init([Package, Action]) ->
-    atomizer_spinner:start(),
+    process_flag(trap_exit, true),
+    atomizer_spinner:start_link(),
     atomizer_spinner:show("Collecting files and directories (~p)"),
     Paths = atomizer:package_paths(Package),
     case atomizer_traverse:detect_sources(Paths, Package) of
         {ok, Files, Dirs} ->
-            atomizer_traverse:start(Dirs, Package),
+            atomizer_traverse:start_link(Dirs, Package),
             case Action of
-                warn -> atomizer_compare:start();
+                warn -> atomizer_compare:start_link();
                 _    -> ignore
             end,
             {ok, #state{package = Package, action = Action, files = sets:from_list(Files)}};
 
         {error, Error} ->
-            {stop, Error}
+            {stop, {shutdown, {error, Error}}}
     end.
 
 handle_call(_Request, _From, State) ->
@@ -59,8 +60,8 @@ handle_cast({done_file, _File}, State) ->
     {noreply, State#state{nr_files = State#state.nr_files + 1}};
 
 handle_cast(done_traversing, #state{files = Files, package = Package} = State) ->
-    atomizer_progress:start(_Elapsed = 0, _Total = sets:size(Files)),
-    atomizer_parse:start(sets:to_list(Files), Package),
+    atomizer_progress:start_link(_Elapsed = 0, _Total = sets:size(Files)),
+    atomizer_parse:start_link(sets:to_list(Files), Package),
     {noreply, State};
 
 handle_cast({atom, Atom, File, Position}, State) ->
@@ -78,8 +79,7 @@ handle_cast(done_atoms, State) when State#state.action == warn ->
 
 handle_cast(done_atoms, #state{atoms = Atoms, nr_dirs = NrDirs, nr_files = NrFiles} = State) ->
     Stats = atomizer:statistics(_NrLooseAtoms = undefined, _NrAtoms = maps:size(Atoms), NrFiles, NrDirs),
-    atomizer_cli:report(Atoms, Stats),
-    {noreply, State};
+    {stop, {shutdown, {ok, Atoms, Stats}}, State};
 
 handle_cast({lookalikes, Atom, Lookalike}, State) ->
     Lookalikes = sets:add_element({Atom, Lookalike}, State#state.lookalikes),
@@ -95,14 +95,12 @@ handle_cast(done_comparing, State) ->
     NrAtoms = maps:size(Atoms),
     NrLooseAtoms = length(LooseAtoms),
     Stats = atomizer:statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs),
-    atomizer_cli:report(LooseAtoms, Stats),
-    {noreply, State};
+    {stop, {shutdown, {ok, LooseAtoms, Stats}}, State}.
 
-handle_cast({error, Error}, State) ->
-    case atomizer_cli_options:get_warn_errors() of
-        true  -> atomizer:warning(Error);
-        false -> atomizer_cli:fail(Error)
-    end,
+handle_info({'EXIT', _Pid, {error, Error}}, State) ->
+    {stop, {shutdown, {error, Error}}, State};
+
+handle_info({'EXIT', _Pid, normal}, State) ->
     {noreply, State}.
 
 file(File) ->
@@ -134,16 +132,12 @@ done_atoms() ->
     atomizer_spinner:show("Searching for loose atoms (~p)"),
     gen_server:cast(?MODULE, done_atoms).
 
--spec fail(atomizer:error()) -> ok.
-fail(Error) ->
-    gen_server:cast(?MODULE, {error, Error}).
-
 -spec stop() -> ok.
 stop() ->
     gen_server:cast(?MODULE, done_comparing).
 
-start(Package, Action) ->
-    gen_server:start({local, ?MODULE}, ?MODULE, [Package, Action], []).
+start_link(Package, Action) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [Package, Action], []).
 
 -spec add_atom_location(atom(), file:filename(), atomizer:position(), atomizer:atoms()) -> atomizer:atoms().
 add_atom_location(Atom, File, Position, Atoms) ->

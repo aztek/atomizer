@@ -3,7 +3,7 @@
 -behavior(gen_server).
 
 -export([
-    start/0,
+    start_link/0,
     show/1,
     tick/0,
     hide/0,
@@ -25,8 +25,8 @@
     last_ticked = 0 :: integer()
 }).
 
-start() ->
-    gen_server:start({local, ?MODULE}, ?MODULE, [], []).
+start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 -spec show(string()) -> ok.
 show(Banner) ->
