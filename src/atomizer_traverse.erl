@@ -2,13 +2,14 @@
 
 -include_lib("kernel/include/file.hrl").
 
+-define(OPEN_DIR_LIMIT, 16).
 -define(MAX_LEVEL_SYMLINKS, 10).
 -define(ERLANG_EXTENSIONS, [".erl", ".hrl"]).
 -define(BEAM_EXTENSIONS, [".beam"]).
 
 -export([
-    traverse/2,
-    detect_source/2,
+    start/2,
+    detect_sources/2,
     format_error/1
 ]).
 
@@ -19,31 +20,104 @@
 -type symlink() :: {Source :: file:filename(), Destination :: file:filename()}.
 -type error()   :: {file:filename() | symlink(), atomizer:error()}.
 
+-define(PROCESS_NAME, ?MODULE).
+
+-record(state, {
+    package :: atomizer:package(),
+    pool = sets:new() :: sets:set(file:filename()),
+    queue :: [file:filename()]
+}).
+
+-spec start([file:filename()], atomizer:package()) -> true.
+start(Dirs, Package) ->
+    register(?PROCESS_NAME, spawn_link(fun () -> loop(#state{package = Package, queue = Dirs}) end)).
+
+-spec add_dir(file:filename()) -> ok.
+add_dir(Dir) ->
+    ?PROCESS_NAME ! {add_dir, Dir},
+    ok.
+
+-spec done_dir(file:filename()) -> ok.
+done_dir(Dir) ->
+    ?PROCESS_NAME ! {done_dir, Dir},
+    ok.
+
+-spec loop(#state{}) -> ok.
+loop(#state{pool = Pool, queue = Queue} = State) ->
+    case {sets:size(Pool), Queue} of
+        {0, []} -> atomizer_sup:done_files();
+
+        {NrTakenDescriptors, [Dir | RestQueue]} when NrTakenDescriptors < ?OPEN_DIR_LIMIT ->
+            spawn_link(fun () ->
+                           case traverse(State#state.package, Dir) of
+                               ok -> done_dir(Dir);
+                               {error, Error} -> atomizer_sup:fail(Error)
+                           end
+                       end),
+            loop(State#state{pool = sets:add_element(Dir, Pool), queue = RestQueue});
+
+        _ ->
+            receive
+                {add_dir, Dir} ->
+                    case sets:is_element(Dir, Pool) of
+                        true -> loop(State);
+                        false -> loop(State#state{queue = [Dir | Queue]})
+                    end;
+
+                {done_dir, Dir} ->
+                    atomizer_sup:done_dir(Dir),
+                    loop(State#state{pool = sets:del_element(Dir, Pool)})
+            end
+    end.
+
 -spec traverse(atomizer:package(), file:filename()) -> ok | {error, atomizer:error()}.
 traverse(Package, Dir) ->
+    case list_dir(Dir) of
+        {ok, Paths} ->
+            case detect_sources(Paths, Package) of
+                {ok, Sources} ->
+                    lists:foreach(fun ({dir, Dir_}) -> add_dir(Dir_);
+                                      (File) -> atomizer_sup:file(File)
+                                  end, Sources);
+                {error, Error} -> {error, Error}
+            end;
+
+        {error, Error} -> {error, Error}
+    end.
+
+-spec list_dir(file:filename()) -> {ok, [file:filename()]} | {error, atomizer:error()}.
+list_dir(Dir) ->
     case file:list_dir(Dir) of
         {ok, Paths} ->
-            Collect = fun (_, {error, Error}) -> {error, Error};
-                          (Path, ok) ->
-                              case detect_source(Path, Package) of
-                                  {ok, Source} -> atomizer_collect:add_source(Source);
-                                  ignore -> ok;
-                                  {error, Error} ->
-                                      case atomizer_cli_options:get_warn_errors() of
-                                          true  -> atomizer:warning(Error);
-                                          false -> {error, Error}
-                                      end
-                              end
-                      end,
-            lists:foldl(Collect, ok, [filename:join(Dir, Path) || Path <- Paths]);
+            {ok, [filename:join(Dir, Path) || Path <- Paths]};
 
         {error, Error} ->
             ExtendedError = {?MODULE, {Dir, {file, Error}}},
             case atomizer_cli_options:get_warn_errors() of
-                true  -> atomizer:warning(ExtendedError);
+                true  -> atomizer:warning(ExtendedError), {ok, []};
                 false -> {error, ExtendedError}
             end
     end.
+
+-spec detect_sources([file:filename()], atomizer:package()) ->
+    {ok, [atomizer:source()]} | {error, atomizer:error()}.
+detect_sources(Paths, Package) ->
+    Collect = fun (_, {error, Error}) -> {error, Error};
+                  (Path, {ok, Sources}) ->
+                      case detect_source(Path, Package) of
+                          {ok, Source} -> {ok, [Source | Sources]};
+                          ignore -> {ok, Sources};
+                          {error, Error} ->
+                              case atomizer_cli_options:get_warn_errors() of
+                                  true ->
+                                      atomizer:warning(Error),
+                                      {ok, Sources};
+                                  false ->
+                                      {error, Error}
+                              end
+                      end
+              end,
+    lists:foldl(Collect, {ok, []}, Paths).
 
 -spec detect_source(file:filename(), atomizer:package()) ->
     {ok, atomizer:source()} | ignore | {error, {?MODULE, error()}}.

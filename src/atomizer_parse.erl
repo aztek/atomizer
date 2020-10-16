@@ -1,7 +1,7 @@
 -module(atomizer_parse).
 
 -export([
-    parse/2,
+    start/2,
     format_error/1
 ]).
 
@@ -9,8 +9,48 @@
     error/0
 ]).
 
+-define(OPEN_FILE_LIMIT, 16).
+-define(PROCESS_NAME, ?MODULE).
+
 -type error() :: {file:filename() | atomizer:location(), {error | warning, lib_error()}}.
 -type lib_error() :: no_abstract_code | {epp | file | beam_lib, term()}.
+
+-record(state, {
+    package :: atomizer:package(),
+    pool = sets:new() :: sets:set(atomizer:file()),
+    queue :: [atomizer:file()]
+}).
+
+-spec start([file:filename()], atomizer:package()) -> true.
+start(Files, Package) ->
+    register(?PROCESS_NAME, spawn_link(fun () -> loop(#state{package = Package, queue = Files}) end)).
+
+-spec done_file(file:filename()) -> ok.
+done_file(File) ->
+    ?PROCESS_NAME ! {done_file, File},
+    ok.
+
+-spec loop(#state{}) -> ok.
+loop(#state{pool = Pool, queue = Queue} = State) ->
+    case {sets:size(Pool), Queue} of
+        {0, []} -> atomizer_sup:done_atoms();
+
+        {NrTakenDescriptors, [File | RestQueue]} when NrTakenDescriptors < ?OPEN_FILE_LIMIT ->
+            spawn_link(fun () ->
+                           case parse(State#state.package, File) of
+                               ok -> done_file(File);
+                               {error, Error} -> atomizer_sup:fail(Error)
+                           end
+                       end),
+            loop(State#state{pool = sets:add_element(File, Pool), queue = RestQueue});
+
+        _ ->
+            receive
+                {done_file, File} ->
+                    atomizer_sup:done_file(File),
+                    loop(State#state{pool = sets:del_element(File, Pool)})
+            end
+    end.
 
 -spec parse(atomizer:package(), atomizer:file()) -> ok | {error, {?MODULE, error()}}.
 parse(Package, File) ->
