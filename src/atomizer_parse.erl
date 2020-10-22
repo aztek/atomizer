@@ -23,12 +23,15 @@
 
 -spec start_link([file:filename()], atomizer:package()) -> pid().
 start_link(Files, Package) ->
-    spawn_link(fun () -> loop(#state{package = Package, queue = Files}) end).
+    spawn_link(fun () ->
+                   atomizer_progress:start_link(0, length(Files)),
+                   loop(#state{package = Package, queue = Files})
+               end).
 
 -spec loop(#state{}) -> ok.
 loop(#state{pool = Pool, queue = Queue} = State) ->
     case {sets:size(Pool), Queue} of
-        {0, []} -> ok;
+        {0, []} -> atomizer_progress:stop();
 
         {NrTakenDescriptors, [File | RestQueue]} when NrTakenDescriptors < ?OPEN_FILE_LIMIT ->
             Parent = self(),
@@ -43,6 +46,7 @@ loop(#state{pool = Pool, queue = Queue} = State) ->
         _ ->
             receive
                 {done_file, File} ->
+                    atomizer_progress:progress(1),
                     atomizer_sup:done_file(File),
                     loop(State#state{pool = sets:del_element(File, Pool)})
             end

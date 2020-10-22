@@ -90,7 +90,6 @@ handle_info({'EXIT', _Pid, {error, Error}}, State) ->
 handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_traverse ->
     #state{files = Files, package = Package} = State,
     atomizer_spinner:hide(),
-    atomizer_progress:start_link(_Elapsed = 0, _Total = sets:size(Files)),
     case State#state.action of
         warn -> atomizer_compare:start_link();
         _    -> ignore
@@ -125,7 +124,6 @@ done_dir(Dir) ->
     gen_server:cast(?MODULE, {done_dir, Dir}).
 
 done_file(File) ->
-    atomizer_progress:progress(1),
     gen_server:cast(?MODULE, {done_file, File}).
 
 -spec atom(atom(), file:filename(), atomizer:position()) -> ok.
