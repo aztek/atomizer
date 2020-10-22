@@ -5,7 +5,7 @@
 -export([
     start_link/2,
     progress/1,
-    stop/0,
+    hide/0,
 
     init/1,
     handle_call/3,
@@ -30,9 +30,9 @@ start_link(Elapsed, Total) ->
 progress(Delta) ->
     gen_server:cast(?MODULE, {progress, Delta}).
 
--spec stop() -> ok.
-stop() ->
-    gen_server:cast(?MODULE, stop).
+-spec hide() -> ok.
+hide() ->
+    gen_server:cast(?MODULE, hide).
 
 init([Elapsed, Total]) ->
     {ok, #state{total = Total, elapsed = Elapsed}}.
@@ -57,7 +57,7 @@ handle_cast({progress, Delta}, State) ->
             {noreply, State#state{elapsed = IncreasedElapsed}}
     end;
 
-handle_cast(stop, State) ->
+handle_cast(hide, State) ->
     atomizer_output:hide_banner(),
     {noreply, State#state{last_shown_progress = 100}}.
 

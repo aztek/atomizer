@@ -31,7 +31,7 @@ start_link(Files, Package) ->
 -spec loop(#state{}) -> ok.
 loop(#state{pool = Pool, queue = Queue} = State) ->
     case {sets:size(Pool), Queue} of
-        {0, []} -> atomizer_progress:stop();
+        {0, []} -> atomizer_progress:hide();
 
         {NrTakenDescriptors, [File | RestQueue]} when NrTakenDescriptors < ?OPEN_FILE_LIMIT ->
             Parent = self(),
