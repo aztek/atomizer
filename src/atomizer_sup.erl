@@ -101,7 +101,6 @@ handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_trave
     {noreply, NextState};
 
 handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse ->
-    atomizer_progress:hide(),
     case State#state.action of
         warn ->
             atomizer_spinner:show("Searching for loose atoms (~p)"),
