@@ -58,7 +58,7 @@ handle_cast(tick, State) ->
     case NowTicked - LastTicked >= ?TICK_INTERVAL of
         true ->
             NextPhase = (LastPhase + 1) rem length(?SPINNER_PHASES),
-            atomizer_output:set_progress(render_spinner(Ticks, NextPhase, Banner)),
+            atomizer_output:set_banner(render_spinner(Ticks, NextPhase, Banner)),
             {noreply, #state{banner = Banner, ticks = Ticks + 1, last_phase = NextPhase, last_ticked = NowTicked}};
 
         false ->
@@ -66,7 +66,7 @@ handle_cast(tick, State) ->
     end;
 
 handle_cast(hide, _) ->
-    atomizer_output:hide_progress(),
+    atomizer_output:hide_banner(),
     {noreply, #state{banner = undefined}}.
 
 -spec render_spinner(non_neg_integer(), phase(), string()) -> io_lib:chars().

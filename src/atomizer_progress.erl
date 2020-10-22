@@ -50,7 +50,7 @@ handle_cast({progress, Delta}, State) ->
     Progress = erlang:min(100, IncreasedProgress),
     case Progress > LastShownProgress of
         true ->
-            atomizer_output:set_progress(render_progress_bar(Progress)),
+            atomizer_output:set_banner(render_progress_bar(Progress)),
             {noreply, State#state{elapsed = IncreasedElapsed, last_shown_progress = Progress}};
 
         false ->
@@ -58,7 +58,7 @@ handle_cast({progress, Delta}, State) ->
     end;
 
 handle_cast(stop, State) ->
-    atomizer_output:hide_progress(),
+    atomizer_output:hide_banner(),
     {noreply, State#state{last_shown_progress = 100}}.
 
 -spec render_progress_bar(progress()) -> io_lib:chars().
