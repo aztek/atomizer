@@ -100,17 +100,15 @@ handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_trave
     },
     {noreply, NextState};
 
+handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse, State#state.action == warn ->
+    atomizer_spinner:show("Searching for loose atoms (~p)"),
+    atomizer_compare:stop(),
+    {noreply, State#state{atomizer_parse = undefined}};
+
 handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse ->
-    case State#state.action of
-        warn ->
-            atomizer_spinner:show("Searching for loose atoms (~p)"),
-            atomizer_compare:stop(),
-            {noreply, State#state{atomizer_parse = undefined}};
-        _ ->
-            #state{atoms = Atoms, nr_dirs = NrDirs, nr_files = NrFiles} = State,
-            Stats = atomizer:statistics(_NrLooseAtoms = undefined, _NrAtoms = maps:size(Atoms), NrFiles, NrDirs),
-            {stop, {shutdown, {ok, Atoms, Stats}}, State#state{atomizer_parse = undefined}}
-    end;
+    #state{atoms = Atoms, nr_dirs = NrDirs, nr_files = NrFiles} = State,
+    Stats = atomizer:statistics(_NrLooseAtoms = undefined, _NrAtoms = maps:size(Atoms), NrFiles, NrDirs),
+    {stop, {shutdown, {ok, Atoms, Stats}}, State#state{atomizer_parse = undefined}};
 
 handle_info({'EXIT', _Pid, normal}, State) ->
     {noreply, State}.
