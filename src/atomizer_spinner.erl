@@ -4,6 +4,7 @@
 
 -export([
     start_link/0,
+    start_link/1,
     show/1,
     tick/0,
     hide/0,
@@ -28,6 +29,9 @@
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
+start_link(Banner) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [Banner], []).
+
 -spec show(string()) -> ok.
 show(Banner) ->
     gen_server:cast(?MODULE, {show, Banner}).
@@ -40,8 +44,11 @@ tick() ->
 hide() ->
     gen_server:cast(?MODULE, hide).
 
-init(_Args) ->
-    {ok, #state{}}.
+init([]) ->
+    {ok, #state{}};
+
+init([Banner]) ->
+    {ok, #state{banner = Banner}}.
 
 handle_call(_Request, _From, State) ->
     {noreply, State}.

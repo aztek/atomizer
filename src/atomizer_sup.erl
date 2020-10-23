@@ -31,8 +31,7 @@
 
 init([Package, Action]) ->
     process_flag(trap_exit, true),
-    atomizer_spinner:start_link(),
-    atomizer_spinner:show("Collecting files and directories (~p)"),
+    atomizer_spinner:start_link("Collecting files and directories (~p)"),
     Paths = atomizer:package_paths(Package),
     case atomizer_traverse:detect_sources(Paths, Package) of
         {ok, Files, Dirs} ->
