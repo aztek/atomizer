@@ -23,6 +23,7 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init(_Args) ->
+    atomizer_spinner:start_link("Searching for loose atoms (~p)", _Active = false),
     {ok, #state{
         atoms = ets:new(atoms, [private, set]),
         normal_forms = ets:new(normal_forms, [private, bag])
@@ -59,6 +60,6 @@ handle_cast({atom, Atom}, State) ->
     {noreply, State}.
 
 terminate(_Reason, State) ->
-    atomizer_spinner:hide(),
+    atomizer_spinner:stop(),
     ets:delete(State#state.normal_forms),
     ets:delete(State#state.atoms).

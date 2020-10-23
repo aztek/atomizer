@@ -33,7 +33,7 @@ loop(#state{pool = Pool, queue = Queue} = State) ->
     case {sets:size(Pool), Queue} of
         {0, []} ->
             atomizer_progress:stop(),
-            atomizer_spinner:show("Searching for loose atoms (~p)");
+            atomizer_spinner:activate();
 
         {NrTakenDescriptors, [File | RestQueue]} when NrTakenDescriptors < ?OPEN_FILE_LIMIT ->
             Parent = self(),
