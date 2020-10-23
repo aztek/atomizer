@@ -4,8 +4,6 @@
     main/1
 ]).
 
--define(PROCESS_NAME, ?MODULE).
-
 -type exit_code() :: non_neg_integer().
 -define(EXIT_CODE_SUCCESS, 0).
 -define(EXIT_CODE_LOOSE_ATOMS_FOUND, 1).
@@ -14,19 +12,14 @@
 -spec main([string()]) -> no_return().
 main(CmdArgs) ->
     process_flag(trap_exit, true),
-    register(?PROCESS_NAME, self()),
     atomizer_output:start_link(),
-    ExitCode = run(CmdArgs),
+    run(CmdArgs),
+    ExitCode = wait(),
     atomizer_output:stop(),
     erlang:halt(ExitCode).
 
--spec quit(exit_code()) -> ok.
-quit(ExitCode) ->
-    ?PROCESS_NAME ! {quit, ExitCode},
-    ok.
-
--spec cli([string()]) -> ok.
-cli(CmdArgs) ->
+-spec run([string()]) -> ok.
+run(CmdArgs) ->
     case atomizer_cli_options:parse(CmdArgs) of
         {options, Options} ->
             Package = atomizer_cli_options:package(Options),
@@ -36,20 +29,16 @@ cli(CmdArgs) ->
 
         {message, Message} ->
             atomizer:print(Message),
-            quit(?EXIT_CODE_SUCCESS);
+            erlang:halt(?EXIT_CODE_SUCCESS);
 
         {error, Error} ->
             atomizer:error(Error),
-            quit(?EXIT_CODE_FAILURE)
+            erlang:halt(?EXIT_CODE_FAILURE)
     end.
 
--spec run([string()]) -> exit_code().
-run(CmdArgs) ->
-    cli(CmdArgs),
+-spec wait() -> exit_code().
+wait() ->
     receive
-        {quit, ExitCode} ->
-            ExitCode;
-
         {'EXIT', _Pid, {shutdown, {ok, {Atoms, Stats}}}} ->
             case atomizer_cli_options:get_action() of
                 list -> list_atoms(Atoms, Stats);
