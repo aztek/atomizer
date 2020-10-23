@@ -3,7 +3,6 @@
 -behavior(gen_server).
 
 -export([
-    start_link/0,
     start_link/1,
     show/1,
     tick/0,
@@ -26,11 +25,12 @@
     last_ticked = 0 :: integer()
 }).
 
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-
+-spec start_link(string()) -> {ok, pid()} | {error, term()}.
 start_link(Banner) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [Banner], []).
+
+init([Banner]) ->
+    {ok, #state{banner = Banner}}.
 
 -spec show(string()) -> ok.
 show(Banner) ->
@@ -43,12 +43,6 @@ tick() ->
 -spec hide() -> ok.
 hide() ->
     gen_server:cast(?MODULE, hide).
-
-init([]) ->
-    {ok, #state{}};
-
-init([Banner]) ->
-    {ok, #state{banner = Banner}}.
 
 handle_call(_Request, _From, State) ->
     {noreply, State}.

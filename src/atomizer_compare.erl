@@ -62,5 +62,6 @@ handle_cast(done_atoms, State) ->
     {stop, normal, State}.
 
 terminate(_Reason, State) ->
+    atomizer_spinner:hide(),
     ets:delete(State#state.normal_forms),
     ets:delete(State#state.atoms).

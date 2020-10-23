@@ -35,7 +35,6 @@ start_link(Package, Action) ->
 
 init([Package, Action]) ->
     process_flag(trap_exit, true),
-    atomizer_spinner:start_link("Collecting files and directories (~p)"),
     Paths = atomizer:package_paths(Package),
     case atomizer_traverse:detect_sources(Paths, Package) of
         {ok, Files, Dirs} ->
@@ -57,7 +56,6 @@ file(File) ->
 
 -spec done_dir(file:filename()) -> ok.
 done_dir(Dir) ->
-    atomizer_spinner:tick(),
     gen_server:cast(?MODULE, {done_dir, Dir}).
 
 -spec done_file(atomizer:file()) -> ok.
@@ -98,7 +96,6 @@ handle_info({'EXIT', _Pid, {error, Error}}, State) ->
     {stop, {shutdown, {error, Error}}, State};
 
 handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_traverse, State#state.action == warn ->
-    atomizer_spinner:hide(),
     {ok, Parse} = atomizer_parse:start_link(sets:to_list(State#state.files), State#state.package),
     {ok, Compare} = atomizer_compare:start_link(),
     {noreply, State#state{
@@ -108,7 +105,6 @@ handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_trave
     }};
 
 handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_traverse ->
-    atomizer_spinner:hide(),
     {ok, Parse} = atomizer_parse:start_link(sets:to_list(State#state.files), State#state.package),
     {noreply, State#state{
         atomizer_traverse = undefined,
@@ -116,7 +112,6 @@ handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_trave
     }};
 
 handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse, State#state.action == warn ->
-    atomizer_spinner:show("Searching for loose atoms (~p)"),
     atomizer_compare:done_atoms(),
     {noreply, State#state{atomizer_parse = undefined}};
 
@@ -124,7 +119,6 @@ handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse
     {stop, {normal, {ok, atoms(State)}}, State#state{atomizer_parse = undefined}};
 
 handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_compare ->
-    atomizer_spinner:hide(),
     {stop, {normal, {ok, loose_atoms(State)}}, State#state{atomizer_compare = undefined}};
 
 handle_info({'EXIT', _Pid, normal}, State) ->
