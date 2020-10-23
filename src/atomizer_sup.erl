@@ -116,10 +116,10 @@ handle_info({'EXIT', Pid, normal}, #state{atomizer_parse = Pid, action = warn} =
     {noreply, State#state{atomizer_parse = undefined}};
 
 handle_info({'EXIT', Pid, normal}, #state{atomizer_parse = Pid} = State) ->
-    {stop, {normal, {ok, atoms(State)}}, State#state{atomizer_parse = undefined}};
+    {stop, {shutdown, {ok, atoms(State)}}, State#state{atomizer_parse = undefined}};
 
 handle_info({'EXIT', Pid, normal}, #state{atomizer_compare = Pid} = State) ->
-    {stop, {normal, {ok, loose_atoms(State)}}, State#state{atomizer_compare = undefined}};
+    {stop, {shutdown, {ok, loose_atoms(State)}}, State#state{atomizer_compare = undefined}};
 
 handle_info({'EXIT', _Pid, normal}, State) ->
     {noreply, State}.
