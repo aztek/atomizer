@@ -32,7 +32,7 @@
 start_link(Dirs, Package) ->
     Pid = spawn_link(fun () -> loop(#state{package = Package, queue = Dirs}) end),
     register(?PROCESS_NAME, Pid),
-    Pid.
+    {ok, Pid}.
 
 -spec add_dir(file:filename()) -> ok.
 add_dir(Dir) ->

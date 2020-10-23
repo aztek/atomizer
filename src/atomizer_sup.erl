@@ -35,13 +35,13 @@ init([Package, Action]) ->
     Paths = atomizer:package_paths(Package),
     case atomizer_traverse:detect_sources(Paths, Package) of
         {ok, Files, Dirs} ->
-            State = #state{
+            {ok, Traverse} = atomizer_traverse:start_link(Dirs, Package),
+            {ok, #state{
                 package = Package,
                 action = Action,
                 files = sets:from_list(Files),
-                atomizer_traverse = atomizer_traverse:start_link(Dirs, Package)
-            },
-            {ok, State};
+                atomizer_traverse = Traverse
+            }};
 
         {error, Error} ->
             {stop, {shutdown, {error, Error}}}
@@ -76,15 +76,16 @@ handle_info({'EXIT', _Pid, {error, Error}}, State) ->
 
 handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_traverse ->
     atomizer_spinner:hide(),
-    NextState = State#state{
+    {ok, Parse} = atomizer_parse:start_link(sets:to_list(State#state.files), State#state.package),
+    {ok, Compare} = case State#state.action of
+                        warn -> atomizer_compare:start_link();
+                        _    -> {ok, undefined}
+                    end,
+    {noreply, State#state{
         atomizer_traverse = undefined,
-        atomizer_parse    = atomizer_parse:start_link(sets:to_list(State#state.files), State#state.package),
-        atomizer_compare  = case State#state.action of
-                                warn -> atomizer_compare:start_link();
-                                _    -> undefined
-                            end
-    },
-    {noreply, NextState};
+        atomizer_parse    = Parse,
+        atomizer_compare  = Compare
+    }};
 
 handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse, State#state.action == warn ->
     atomizer_spinner:show("Searching for loose atoms (~p)"),

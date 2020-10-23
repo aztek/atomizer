@@ -14,8 +14,7 @@
 ]).
 
 start_link() ->
-    {ok, Pid} = gen_server:start_link({local, ?MODULE}, ?MODULE, [], []),
-    Pid.
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 atom(Atom) ->
     gen_server:cast(?MODULE, {atom, Atom}).

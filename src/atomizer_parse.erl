@@ -23,10 +23,11 @@
 
 -spec start_link([file:filename()], atomizer:package()) -> pid().
 start_link(Files, Package) ->
-    spawn_link(fun () ->
-                   atomizer_progress:start_link(0, length(Files)),
-                   loop(#state{package = Package, queue = Files})
-               end).
+    Pid = spawn_link(fun () ->
+                         atomizer_progress:start_link(0, length(Files)),
+                         loop(#state{package = Package, queue = Files})
+                     end),
+    {ok, Pid}.
 
 -spec loop(#state{}) -> ok.
 loop(#state{pool = Pool, queue = Queue} = State) ->
