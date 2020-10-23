@@ -9,7 +9,6 @@
     done_file/1,
     atom/3,
     lookalikes/2,
-    stop/0,
 
     init/1,
     handle_call/3,
@@ -26,7 +25,8 @@
     nr_dirs = 0 :: integer(),
     nr_files = 0 :: integer(),
     atomizer_traverse :: pid() | undefined,
-    atomizer_parse :: pid() | undefined
+    atomizer_parse    :: pid() | undefined,
+    atomizer_compare  :: pid() | undefined
 }).
 
 init([Package, Action]) ->
@@ -70,9 +70,34 @@ handle_cast({atom, Atom, File, Position}, State) ->
 
 handle_cast({lookalikes, Atom, Lookalike}, State) ->
     Lookalikes = sets:add_element({Atom, Lookalike}, State#state.lookalikes),
-    {noreply, State#state{lookalikes = Lookalikes}};
+    {noreply, State#state{lookalikes = Lookalikes}}.
 
-handle_cast(done_comparing, State) ->
+handle_info({'EXIT', _Pid, {error, Error}}, State) ->
+    {stop, {shutdown, {error, Error}}, State};
+
+handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_traverse ->
+    atomizer_spinner:hide(),
+    NextState = State#state{
+        atomizer_traverse = undefined,
+        atomizer_parse    = atomizer_parse:start_link(sets:to_list(State#state.files), State#state.package),
+        atomizer_compare  = case State#state.action of
+                                warn -> atomizer_compare:start_link();
+                                _    -> undefined
+                            end
+    },
+    {noreply, NextState};
+
+handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse, State#state.action == warn ->
+    atomizer_spinner:show("Searching for loose atoms (~p)"),
+    atomizer_compare:done_atoms(),
+    {noreply, State#state{atomizer_parse = undefined}};
+
+handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse ->
+    #state{atoms = Atoms, nr_dirs = NrDirs, nr_files = NrFiles} = State,
+    Stats = atomizer:statistics(_NrLooseAtoms = undefined, _NrAtoms = maps:size(Atoms), NrFiles, NrDirs),
+    {stop, {shutdown, {ok, Atoms, Stats}}, State#state{atomizer_parse = undefined}};
+
+handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_compare ->
     atomizer_spinner:hide(),
     #state{atoms = Atoms, lookalikes = Lookalikes, nr_files = NrFiles, nr_dirs = NrDirs} = State,
     LooseAtoms = lists:filtermap(fun ({A, B}) ->
@@ -82,33 +107,7 @@ handle_cast(done_comparing, State) ->
     NrAtoms = maps:size(Atoms),
     NrLooseAtoms = length(LooseAtoms),
     Stats = atomizer:statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs),
-    {stop, {shutdown, {ok, LooseAtoms, Stats}}, State}.
-
-handle_info({'EXIT', _Pid, {error, Error}}, State) ->
-    {stop, {shutdown, {error, Error}}, State};
-
-handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_traverse ->
-    #state{files = Files, package = Package} = State,
-    atomizer_spinner:hide(),
-    case State#state.action of
-        warn -> atomizer_compare:start_link();
-        _    -> ignore
-    end,
-    NextState = State#state{
-        atomizer_traverse = undefined,
-        atomizer_parse = atomizer_parse:start_link(sets:to_list(Files), Package)
-    },
-    {noreply, NextState};
-
-handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse, State#state.action == warn ->
-    atomizer_spinner:show("Searching for loose atoms (~p)"),
-    atomizer_compare:stop(),
-    {noreply, State#state{atomizer_parse = undefined}};
-
-handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse ->
-    #state{atoms = Atoms, nr_dirs = NrDirs, nr_files = NrFiles} = State,
-    Stats = atomizer:statistics(_NrLooseAtoms = undefined, _NrAtoms = maps:size(Atoms), NrFiles, NrDirs),
-    {stop, {shutdown, {ok, Atoms, Stats}}, State#state{atomizer_parse = undefined}};
+    {stop, {shutdown, {ok, LooseAtoms, Stats}}, State#state{atomizer_compare = undefined}};
 
 handle_info({'EXIT', _Pid, normal}, State) ->
     {noreply, State}.
@@ -130,10 +129,6 @@ atom(Atom, File, Position) ->
 -spec lookalikes(atom(), atom()) -> ok.
 lookalikes(Atom, Lookalike) ->
     gen_server:cast(?MODULE, {lookalikes, Atom, Lookalike}).
-
--spec stop() -> ok.
-stop() ->
-    gen_server:cast(?MODULE, done_comparing).
 
 start_link(Package, Action) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [Package, Action], []).

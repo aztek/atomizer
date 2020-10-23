@@ -5,7 +5,7 @@
 -export([
     start_link/0,
     atom/1,
-    stop/0,
+    done_atoms/0,
 
     init/1,
     handle_call/3,
@@ -14,12 +14,13 @@
 ]).
 
 start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+    {ok, Pid} = gen_server:start_link({local, ?MODULE}, ?MODULE, [], []),
+    Pid.
 
 atom(Atom) ->
     gen_server:cast(?MODULE, {atom, Atom}).
 
-stop() ->
+done_atoms() ->
     gen_server:cast(?MODULE, done_atoms).
 
 -record(state, {
@@ -54,8 +55,7 @@ handle_cast({atom, Atom}, State) ->
     {noreply, State};
 
 handle_cast(done_atoms, State) ->
-    atomizer_sup:stop(),
-    {noreply, State}.
+    {stop, normal, State}.
 
 significant(Atom) ->
     length(atom_to_list(Atom)) > 2.
