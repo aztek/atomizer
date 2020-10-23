@@ -5,7 +5,7 @@
 -export([
     start_link/0,
     atom/1,
-    done_atoms/0,
+    stop/0,
 
     init/1,
     handle_call/3,
@@ -32,9 +32,9 @@ init(_Args) ->
 atom(Atom) ->
     gen_server:cast(?MODULE, {atom, Atom}).
 
--spec done_atoms() -> ok.
-done_atoms() ->
-    gen_server:cast(?MODULE, done_atoms).
+-spec stop() -> ok.
+stop() ->
+    gen_server:stop(?MODULE).
 
 handle_call(_Request, _From, State) ->
     {noreply, State}.
@@ -56,10 +56,7 @@ handle_cast({atom, Atom}, State) ->
             end;
         false -> ignore
     end,
-    {noreply, State};
-
-handle_cast(done_atoms, State) ->
-    {stop, normal, State}.
+    {noreply, State}.
 
 terminate(_Reason, State) ->
     atomizer_spinner:hide(),

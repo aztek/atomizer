@@ -32,7 +32,7 @@ start_link(Files, Package) ->
 loop(#state{pool = Pool, queue = Queue} = State) ->
     case {sets:size(Pool), Queue} of
         {0, []} ->
-            atomizer_progress:hide(),
+            atomizer_progress:stop(),
             atomizer_spinner:show("Searching for loose atoms (~p)");
 
         {NrTakenDescriptors, [File | RestQueue]} when NrTakenDescriptors < ?OPEN_FILE_LIMIT ->

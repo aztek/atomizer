@@ -112,7 +112,7 @@ handle_info({'EXIT', Pid, normal}, #state{atomizer_traverse = Pid} = State) ->
     }};
 
 handle_info({'EXIT', Pid, normal}, #state{atomizer_parse = Pid, action = warn} = State) ->
-    atomizer_compare:done_atoms(),
+    atomizer_compare:stop(),
     {noreply, State#state{atomizer_parse = undefined}};
 
 handle_info({'EXIT', Pid, normal}, #state{atomizer_parse = Pid} = State) ->

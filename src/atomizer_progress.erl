@@ -5,11 +5,12 @@
 -export([
     start_link/2,
     progress/1,
-    hide/0,
+    stop/0,
 
     init/1,
     handle_call/3,
-    handle_cast/2
+    handle_cast/2,
+    terminate/2
 ]).
 
 -define(PROGRESS_BAR_SCALE, 70).
@@ -34,9 +35,9 @@ init([Elapsed, Total]) ->
 progress(Delta) ->
     gen_server:cast(?MODULE, {progress, Delta}).
 
--spec hide() -> ok.
-hide() ->
-    gen_server:cast(?MODULE, hide).
+-spec stop() -> ok.
+stop() ->
+    gen_server:stop(?MODULE).
 
 handle_call(_Request, _From, State) ->
     {noreply, State}.
@@ -56,11 +57,10 @@ handle_cast({progress, Delta}, State) ->
 
         false ->
             {noreply, State#state{elapsed = IncreasedElapsed}}
-    end;
+    end.
 
-handle_cast(hide, State) ->
-    atomizer_output:hide_banner(),
-    {noreply, State#state{last_shown_progress = 100}}.
+terminate(_, _) ->
+    atomizer_output:hide_banner().
 
 -spec render_progress_bar(progress()) -> io_lib:chars().
 render_progress_bar(Progress) ->

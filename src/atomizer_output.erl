@@ -36,10 +36,10 @@ hide_banner() ->
 
 -spec stop() -> ok.
 stop() ->
-    gen_server:call(?MODULE, stop, _Timeout = infinity).
+    gen_server:stop(?MODULE).
 
-handle_call(stop, _From, State) ->
-    {reply, ok, State}.
+handle_call(_Msg, _From, State) ->
+    {noreply, State}.
 
 handle_cast({output, IoDevice, Message}, LastShownBanner) ->
     erase_banner(LastShownBanner),
