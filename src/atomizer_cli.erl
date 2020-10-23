@@ -50,7 +50,7 @@ run(CmdArgs) ->
         {quit, ExitCode} ->
             ExitCode;
 
-        {'EXIT', _Pid, {shutdown, {ok, Atoms, Stats}}} ->
+        {'EXIT', _Pid, {normal, {ok, Atoms, Stats}}} ->
             case atomizer_cli_options:get_action() of
                 list -> list_atoms(Atoms, Stats);
                 show -> show_atoms(Atoms, Stats);

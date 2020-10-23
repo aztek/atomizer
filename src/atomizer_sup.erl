@@ -95,7 +95,7 @@ handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse
 handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse ->
     #state{atoms = Atoms, nr_dirs = NrDirs, nr_files = NrFiles} = State,
     Stats = atomizer:statistics(_NrLooseAtoms = undefined, _NrAtoms = maps:size(Atoms), NrFiles, NrDirs),
-    {stop, {shutdown, {ok, Atoms, Stats}}, State#state{atomizer_parse = undefined}};
+    {stop, {normal, {ok, Atoms, Stats}}, State#state{atomizer_parse = undefined}};
 
 handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_compare ->
     atomizer_spinner:hide(),
@@ -107,7 +107,7 @@ handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_compa
     NrAtoms = maps:size(Atoms),
     NrLooseAtoms = length(LooseAtoms),
     Stats = atomizer:statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs),
-    {stop, {shutdown, {ok, LooseAtoms, Stats}}, State#state{atomizer_compare = undefined}};
+    {stop, {normal, {ok, LooseAtoms, Stats}}, State#state{atomizer_compare = undefined}};
 
 handle_info({'EXIT', _Pid, normal}, State) ->
     {noreply, State}.
