@@ -47,10 +47,10 @@ ascii_color(Color, Chars) -> [Color, ascii_recolor(Color, Chars), ?CLEAR].
 -spec ascii_recolor(string(), io_lib:chars()) -> io_lib:chars().
 ascii_recolor(Color, Chars) ->
     lists:flatmap(fun (?CLEAR) -> [?CLEAR, Color];
-        (Chunks) when is_list(Chunks) -> [ascii_recolor(Color, Chunks)];
-        (Char) -> [Char]
+                      (Chunks) when is_list(Chunks) -> [ascii_recolor(Color, Chunks)];
+                      (Char) -> [Char]
                   end,
-        Chars).
+                  Chars).
 
 -spec bold(io_lib:chars()) -> io_lib:chars().
 bold(Chars) -> ascii_color(?BOLD, Chars).
