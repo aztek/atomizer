@@ -42,7 +42,11 @@
 -define(BG_CYAN,   "\e[46m").
 
 -spec ascii_color(string(), io_lib:chars()) -> io_lib:chars().
-ascii_color(Color, Chars) -> [Color, ascii_recolor(Color, Chars), ?CLEAR].
+ascii_color(Color, Chars) ->
+    case atomizer_cli_options:get_colors() of
+        true  -> [Color, ascii_recolor(Color, Chars), ?CLEAR];
+        false -> Chars
+    end.
 
 -spec ascii_recolor(string(), io_lib:chars()) -> io_lib:chars().
 ascii_recolor(Color, Chars) ->

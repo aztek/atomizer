@@ -6,6 +6,7 @@
     package/1,
     get_action/0,
     get_verbosity/0,
+    get_colors/0,
     get_warn_errors/0,
     format_error/1
 ]).
@@ -28,7 +29,8 @@
     follow_symlinks = false :: boolean(),
     parse_beams     = false :: boolean(),
     warn_errors     = false :: boolean(),
-    verbosity       = 1     :: verbosity()
+    verbosity       = 1     :: verbosity(),
+    colors          = false :: boolean()
 }).
 -opaque options() :: #options{}.
 
@@ -112,6 +114,9 @@ parse_option(Option, CmdArgs, Options) ->
                     {error, Error}
             end;
 
+        _Colors when Option == "c"; Option == "-colors" ->
+            parse(CmdArgs, Options#options{colors = true});
+
         _ ->
             {error, {unrecognized_option, Option}}
     end.
@@ -148,7 +153,7 @@ usage() ->
     "Usage: atomizer [-a | --action ACTION] [-b | --parse-beams]\n" ++
     "                [-x | --ignore PATH*] [-i | -I | --include PATH*]\n" ++
     "                [-l | --follow-symlinks] [-w | --warn-errors]\n"
-    "                [-v | --verbosity VERBOSITY] PATH*\n".
+    "                [-v | --verbosity VERBOSITY] [-c | --colors] PATH*\n".
 
 help() ->
     "".
@@ -194,6 +199,11 @@ get_warn_errors() ->
 get_verbosity() ->
     Options = get_options(),
     Options#options.verbosity.
+
+-spec get_colors() -> boolean().
+get_colors() ->
+    Options = get_options(),
+    Options#options.colors.
 
 -spec get_action() -> action().
 get_action() ->
