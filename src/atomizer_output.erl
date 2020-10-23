@@ -36,7 +36,7 @@ hide_banner() ->
 
 -spec stop() -> ok.
 stop() ->
-    gen_server:call(?MODULE, stop).
+    gen_server:call(?MODULE, stop, _Timeout = infinity).
 
 handle_call(stop, _From, State) ->
     {reply, ok, State}.
