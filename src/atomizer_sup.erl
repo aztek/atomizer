@@ -84,32 +84,35 @@ handle_cast({done_dir, _Dir}, State) ->
 handle_cast({done_file, _File}, State) ->
     {noreply, State#state{nr_files = State#state.nr_files + 1}};
 
+handle_cast({atom, Atom, File, Position}, State) when State#state.action == warn ->
+    atomizer_compare:atom(Atom),
+    {noreply, State#state{atoms = add_atom_location(Atom, File, Position, State#state.atoms)}};
+
 handle_cast({atom, Atom, File, Position}, State) ->
-    case State#state.action of
-        warn -> atomizer_compare:atom(Atom);
-        _    -> ignore
-    end,
-    Atoms = add_atom_location(Atom, File, Position, State#state.atoms),
-    {noreply, State#state{atoms = Atoms}};
+    {noreply, State#state{atoms = add_atom_location(Atom, File, Position, State#state.atoms)}};
 
 handle_cast({lookalikes, Atom, Lookalike}, State) ->
-    Lookalikes = sets:add_element({Atom, Lookalike}, State#state.lookalikes),
-    {noreply, State#state{lookalikes = Lookalikes}}.
+    {noreply, State#state{lookalikes = sets:add_element({Atom, Lookalike}, State#state.lookalikes)}}.
 
 handle_info({'EXIT', _Pid, {error, Error}}, State) ->
     {stop, {shutdown, {error, Error}}, State};
 
-handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_traverse ->
+handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_traverse, State#state.action == warn ->
     atomizer_spinner:hide(),
     {ok, Parse} = atomizer_parse:start_link(sets:to_list(State#state.files), State#state.package),
-    {ok, Compare} = case State#state.action of
-                        warn -> atomizer_compare:start_link();
-                        _    -> {ok, undefined}
-                    end,
+    {ok, Compare} = atomizer_compare:start_link(),
     {noreply, State#state{
         atomizer_traverse = undefined,
         atomizer_parse    = Parse,
         atomizer_compare  = Compare
+    }};
+
+handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_traverse ->
+    atomizer_spinner:hide(),
+    {ok, Parse} = atomizer_parse:start_link(sets:to_list(State#state.files), State#state.package),
+    {noreply, State#state{
+        atomizer_traverse = undefined,
+        atomizer_parse    = Parse
     }};
 
 handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse, State#state.action == warn ->
@@ -118,24 +121,31 @@ handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse
     {noreply, State#state{atomizer_parse = undefined}};
 
 handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse ->
-    #state{atoms = Atoms, nr_dirs = NrDirs, nr_files = NrFiles} = State,
-    Stats = atomizer:statistics(_NrLooseAtoms = undefined, _NrAtoms = maps:size(Atoms), NrFiles, NrDirs),
-    {stop, {normal, {ok, Atoms, Stats}}, State#state{atomizer_parse = undefined}};
+    {stop, {normal, {ok, atoms(State)}}, State#state{atomizer_parse = undefined}};
 
 handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_compare ->
     atomizer_spinner:hide(),
-    #state{atoms = Atoms, lookalikes = Lookalikes, nr_files = NrFiles, nr_dirs = NrDirs} = State,
-    LooseAtoms = lists:filtermap(fun ({A, B}) ->
-                                     atomizer_heuristic:is_loose({A, maps:get(A, Atoms)}, {B, maps:get(B, Atoms)})
-                                 end,
-                                 sets:to_list(Lookalikes)),
-    NrAtoms = maps:size(Atoms),
-    NrLooseAtoms = length(LooseAtoms),
-    Stats = atomizer:statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs),
-    {stop, {normal, {ok, LooseAtoms, Stats}}, State#state{atomizer_compare = undefined}};
+    {stop, {normal, {ok, loose_atoms(State)}}, State#state{atomizer_compare = undefined}};
 
 handle_info({'EXIT', _Pid, normal}, State) ->
     {noreply, State}.
+
+-spec atoms(#state{}) -> {atomizer:atoms(), atomizer:statistics()}.
+atoms(#state{atoms = Atoms, nr_dirs = NrDirs, nr_files = NrFiles}) ->
+    NrLooseAtoms = undefined,
+    NrAtoms = maps:size(Atoms),
+    Statistics = atomizer:statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs),
+    {Atoms, Statistics}.
+
+-spec loose_atoms(#state{}) -> {[atomizer:loose_atom()], atomizer:statistics()}.
+loose_atoms(#state{atoms = Atoms, lookalikes = Lookalikes, nr_files = NrFiles, nr_dirs = NrDirs}) ->
+    AtomInfo = fun (A) -> {A, maps:get(A, Atoms)} end,
+    IsLoose = fun ({A, B}) -> atomizer_heuristic:is_loose(AtomInfo(A), AtomInfo(B)) end,
+    LooseAtoms = lists:filtermap(IsLoose, sets:to_list(Lookalikes)),
+    NrAtoms = maps:size(Atoms),
+    NrLooseAtoms = length(LooseAtoms),
+    Statistics = atomizer:statistics(NrLooseAtoms, NrAtoms, NrFiles, NrDirs),
+    {LooseAtoms, Statistics}.
 
 -spec add_atom_location(atom(), file:filename(), atomizer:position(), atomizer:atoms()) -> atomizer:atoms().
 add_atom_location(Atom, File, Position, Atoms) ->
