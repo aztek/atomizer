@@ -47,8 +47,8 @@ handle_cast({output, IoDevice, Message}, LastShownBanner) ->
     draw_banner(LastShownBanner),
     {noreply, LastShownBanner};
 
-handle_cast({set_banner, Banner}, LastShownBanner) when Banner == LastShownBanner ->
-    {noreply, Banner};
+handle_cast({set_banner, LastShownBanner}, LastShownBanner) ->
+    {noreply, LastShownBanner};
 
 handle_cast({set_banner, Banner}, LastShownBanner) ->
     redraw_banner(LastShownBanner, Banner),

@@ -82,7 +82,7 @@ handle_cast({done_dir, _Dir}, State) ->
 handle_cast({done_file, _File}, State) ->
     {noreply, State#state{nr_files = State#state.nr_files + 1}};
 
-handle_cast({atom, Atom, File, Position}, State) when State#state.action == warn ->
+handle_cast({atom, Atom, File, Position}, #state{action = warn} = State) ->
     atomizer_compare:atom(Atom),
     {noreply, State#state{atoms = add_atom_location(Atom, File, Position, State#state.atoms)}};
 
@@ -95,7 +95,7 @@ handle_cast({lookalikes, Atom, Lookalike}, State) ->
 handle_info({'EXIT', _Pid, {error, Error}}, State) ->
     {stop, {shutdown, {error, Error}}, State};
 
-handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_traverse, State#state.action == warn ->
+handle_info({'EXIT', Pid, normal}, #state{atomizer_traverse = Pid, action = warn} = State) ->
     {ok, Parse} = atomizer_parse:start_link(sets:to_list(State#state.files), State#state.package),
     {ok, Compare} = atomizer_compare:start_link(),
     {noreply, State#state{
@@ -104,21 +104,21 @@ handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_trave
         atomizer_compare  = Compare
     }};
 
-handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_traverse ->
+handle_info({'EXIT', Pid, normal}, #state{atomizer_traverse = Pid} = State) ->
     {ok, Parse} = atomizer_parse:start_link(sets:to_list(State#state.files), State#state.package),
     {noreply, State#state{
         atomizer_traverse = undefined,
         atomizer_parse    = Parse
     }};
 
-handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse, State#state.action == warn ->
+handle_info({'EXIT', Pid, normal}, #state{atomizer_parse = Pid, action = warn} = State) ->
     atomizer_compare:done_atoms(),
     {noreply, State#state{atomizer_parse = undefined}};
 
-handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_parse ->
+handle_info({'EXIT', Pid, normal}, #state{atomizer_parse = Pid} = State) ->
     {stop, {normal, {ok, atoms(State)}}, State#state{atomizer_parse = undefined}};
 
-handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_compare ->
+handle_info({'EXIT', Pid, normal}, #state{atomizer_compare = Pid} = State) ->
     {stop, {normal, {ok, loose_atoms(State)}}, State#state{atomizer_compare = undefined}};
 
 handle_info({'EXIT', _Pid, normal}, State) ->

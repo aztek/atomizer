@@ -50,11 +50,11 @@ handle_call(_Request, _From, State) ->
 handle_cast({show, Banner}, _) ->
     {noreply, #state{banner = Banner}};
 
-handle_cast(tick, State) when State#state.banner == undefined ->
+handle_cast(tick, #state{banner = undefined} = State) ->
     {noreply, State};
 
 handle_cast(tick, State) ->
-    #state{banner=Banner, ticks=Ticks, last_phase=LastPhase, last_ticked=LastTicked} = State,
+    #state{banner = Banner, ticks = Ticks, last_phase = LastPhase, last_ticked = LastTicked} = State,
     NowTicked = erlang:system_time(millisecond),
     case NowTicked - LastTicked >= ?TICK_INTERVAL of
         true ->
