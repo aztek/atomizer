@@ -10,7 +10,6 @@
 ]).
 
 -define(OPEN_FILE_LIMIT, 16).
--define(PROCESS_NAME, ?MODULE).
 
 -type error() :: {file:filename() | atomizer:location(), {error | warning, lib_error()}}.
 -type lib_error() :: no_abstract_code | {epp | file | beam_lib, term()}.
@@ -21,7 +20,7 @@
     queue :: [atomizer:file()]
 }).
 
--spec start_link([file:filename()], atomizer:package()) -> pid().
+-spec start_link([file:filename()], atomizer:package()) -> {ok, pid()}.
 start_link(Files, Package) ->
     Pid = spawn_link(fun () ->
                          atomizer_progress:start_link(0, length(Files)),

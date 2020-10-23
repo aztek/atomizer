@@ -15,8 +15,28 @@
     terminate/2
 ]).
 
+-spec start_link() -> {ok, pid()} | {error, term()}.
+start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
 init(_Args) ->
     {ok, ""}.
+
+-spec put_chars(io:device(), io_lib:chars()) -> ok.
+put_chars(IoDevice, Message) ->
+    gen_server:cast(?MODULE, {output, IoDevice, Message}).
+
+-spec set_banner(string()) -> ok.
+set_banner(Banner) ->
+    gen_server:cast(?MODULE, {set_banner, Banner}).
+
+-spec hide_banner() -> ok.
+hide_banner() ->
+    gen_server:cast(?MODULE, hide_banner).
+
+-spec stop() -> ok.
+stop() ->
+    gen_server:call(?MODULE, stop).
 
 handle_call(stop, _From, State) ->
     {reply, ok, State}.
@@ -40,26 +60,6 @@ handle_cast(hide_banner, LastShownBanner) ->
 
 terminate(_Reason, LastShownBanner) ->
     erase_banner(LastShownBanner).
-
-
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-
--spec put_chars(io:device(), io_lib:chars()) -> ok.
-put_chars(IoDevice, Message) ->
-    gen_server:cast(?MODULE, {output, IoDevice, Message}).
-
--spec set_banner(string()) -> ok.
-set_banner(Banner) ->
-    gen_server:cast(?MODULE, {set_banner, Banner}).
-
--spec hide_banner() -> ok.
-hide_banner() ->
-    gen_server:cast(?MODULE, hide_banner).
-
--spec stop() -> ok.
-stop() ->
-    gen_server:call(?MODULE, stop).
 
 
 -define(HIDE_CURSOR, "\e[?25l").

@@ -13,32 +13,37 @@
     terminate/2
 ]).
 
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-
-atom(Atom) ->
-    gen_server:cast(?MODULE, {atom, Atom}).
-
-done_atoms() ->
-    gen_server:cast(?MODULE, done_atoms).
-
 -record(state, {
     atoms :: ets:tid(),
     normal_forms :: ets:tid()
 }).
 
+-spec start_link() -> {ok, pid()} | {error, term()}.
+start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
 init(_Args) ->
-    {ok, #state{atoms = ets:new(atoms, [private, set]),
-                normal_forms = ets:new(normal_forms, [private, bag])}}.
+    {ok, #state{
+        atoms = ets:new(atoms, [private, set]),
+        normal_forms = ets:new(normal_forms, [private, bag])
+    }}.
+
+-spec atom(atom()) -> ok.
+atom(Atom) ->
+    gen_server:cast(?MODULE, {atom, Atom}).
+
+-spec done_atoms() -> ok.
+done_atoms() ->
+    gen_server:cast(?MODULE, done_atoms).
 
 handle_call(_Request, _From, State) ->
     {noreply, State}.
 
 handle_cast({atom, Atom}, State) ->
-    case significant(Atom) andalso ets:insert_new(State#state.atoms, {Atom}) of
+    case atomizer_heuristic:is_significant(Atom) andalso ets:insert_new(State#state.atoms, {Atom}) of
         true ->
             atomizer_spinner:tick(),
-            case atomizer_normalize:normalize(Atom) of
+            case atomizer_heuristic:normalize(Atom) of
                 {ok, NormalForm} ->
                     NormalForms = State#state.normal_forms,
                     case ets:lookup(NormalForms, NormalForm) of
@@ -55,9 +60,6 @@ handle_cast({atom, Atom}, State) ->
 
 handle_cast(done_atoms, State) ->
     {stop, normal, State}.
-
-significant(Atom) ->
-    length(atom_to_list(Atom)) > 2.
 
 terminate(_Reason, State) ->
     ets:delete(State#state.normal_forms),

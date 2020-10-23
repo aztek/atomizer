@@ -29,6 +29,10 @@
     atomizer_compare  :: pid() | undefined
 }).
 
+-spec start_link(atomizer:package(), atomizer_cli_options:action()) -> {ok, pid()} | {error, term()}.
+start_link(Package, Action) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [Package, Action], []).
+
 init([Package, Action]) ->
     process_flag(trap_exit, true),
     atomizer_spinner:start_link("Collecting files and directories (~p)"),
@@ -46,6 +50,27 @@ init([Package, Action]) ->
         {error, Error} ->
             {stop, {shutdown, {error, Error}}}
     end.
+
+-spec file(atomizer:file()) -> ok.
+file(File) ->
+    gen_server:cast(?MODULE, {file, File}).
+
+-spec done_dir(file:filename()) -> ok.
+done_dir(Dir) ->
+    atomizer_spinner:tick(),
+    gen_server:cast(?MODULE, {done_dir, Dir}).
+
+-spec done_file(atomizer:file()) -> ok.
+done_file(File) ->
+    gen_server:cast(?MODULE, {done_file, File}).
+
+-spec atom(atom(), file:filename(), atomizer:position()) -> ok.
+atom(Atom, File, Position) ->
+    gen_server:cast(?MODULE, {atom, Atom, File, Position}).
+
+-spec lookalikes(atom(), atom()) -> ok.
+lookalikes(Atom, Lookalike) ->
+    gen_server:cast(?MODULE, {lookalikes, Atom, Lookalike}).
 
 handle_call(_Request, _From, State) ->
     {noreply, State}.
@@ -101,7 +126,7 @@ handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_compa
     atomizer_spinner:hide(),
     #state{atoms = Atoms, lookalikes = Lookalikes, nr_files = NrFiles, nr_dirs = NrDirs} = State,
     LooseAtoms = lists:filtermap(fun ({A, B}) ->
-                                     is_loose({A, maps:get(A, Atoms)}, {B, maps:get(B, Atoms)})
+                                     atomizer_heuristic:is_loose({A, maps:get(A, Atoms)}, {B, maps:get(B, Atoms)})
                                  end,
                                  sets:to_list(Lookalikes)),
     NrAtoms = maps:size(Atoms),
@@ -112,27 +137,6 @@ handle_info({'EXIT', Pid, normal}, State) when Pid == State#state.atomizer_compa
 handle_info({'EXIT', _Pid, normal}, State) ->
     {noreply, State}.
 
-file(File) ->
-    gen_server:cast(?MODULE, {file, File}).
-
-done_dir(Dir) ->
-    atomizer_spinner:tick(),
-    gen_server:cast(?MODULE, {done_dir, Dir}).
-
-done_file(File) ->
-    gen_server:cast(?MODULE, {done_file, File}).
-
--spec atom(atom(), file:filename(), atomizer:position()) -> ok.
-atom(Atom, File, Position) ->
-    gen_server:cast(?MODULE, {atom, Atom, File, Position}).
-
--spec lookalikes(atom(), atom()) -> ok.
-lookalikes(Atom, Lookalike) ->
-    gen_server:cast(?MODULE, {lookalikes, Atom, Lookalike}).
-
-start_link(Package, Action) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [Package, Action], []).
-
 -spec add_atom_location(atom(), file:filename(), atomizer:position(), atomizer:atoms()) -> atomizer:atoms().
 add_atom_location(Atom, File, Position, Atoms) ->
     Locations = maps:get(Atom, Atoms, maps:new()),
@@ -140,30 +144,3 @@ add_atom_location(Atom, File, Position, Atoms) ->
     UpdatedPositions = sets:add_element(Position, Positions),
     UpdatedLocations = maps:put(File, UpdatedPositions, Locations),
     maps:put(Atom, UpdatedLocations, Atoms).
-
--spec is_loose(atomizer:atom_info(), atomizer:atom_info()) -> {true, atomizer:loose_atom()} | false.
-is_loose({_, LocationsA} = A, {_, LocationsB} = B) ->
-    NrOccurrencesA = atomizer:nr_occurrences(LocationsA),
-    NrOccurrencesB = atomizer:nr_occurrences(LocationsB),
-
-    {{Loose, Lookalike}, Min, Max} =
-        case NrOccurrencesA < NrOccurrencesB of
-            true  -> {{A, B}, NrOccurrencesA, NrOccurrencesB};
-            false -> {{B, A}, NrOccurrencesB, NrOccurrencesA}
-        end,
-
-    Disproportion = 4,
-    Disproportional = Max > Min * Disproportion,
-
-    case Disproportional andalso local(Loose) andalso related(A, B) of
-        true  -> {true, {Loose, Lookalike}};
-        false -> false
-    end.
-
--spec local(atomizer:atom_info()) -> boolean().
-local({_, Locations}) ->
-    atomizer:nr_files(Locations) == 1.
-
--spec related(atomizer:atom_info(), atomizer:atom_info()) -> boolean().
-related({_, LocationsA}, {_, LocationsB}) ->
-    lists:any(fun (File) -> maps:is_key(File, LocationsB) end, maps:keys(LocationsA)).

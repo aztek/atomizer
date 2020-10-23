@@ -23,8 +23,12 @@
     last_shown_progress = 0 :: progress()
 }).
 
+-spec start_link(non_neg_integer(), non_neg_integer()) -> {ok, pid()} | {error, term()}.
 start_link(Elapsed, Total) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [Elapsed, Total], []).
+
+init([Elapsed, Total]) ->
+    {ok, #state{total = Total, elapsed = Elapsed}}.
 
 -spec progress(non_neg_integer()) -> ok.
 progress(Delta) ->
@@ -33,9 +37,6 @@ progress(Delta) ->
 -spec hide() -> ok.
 hide() ->
     gen_server:cast(?MODULE, hide).
-
-init([Elapsed, Total]) ->
-    {ok, #state{total = Total, elapsed = Elapsed}}.
 
 handle_call(_Request, _From, State) ->
     {noreply, State}.
