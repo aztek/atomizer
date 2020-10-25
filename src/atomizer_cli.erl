@@ -13,40 +13,35 @@
 main(CmdArgs) ->
     process_flag(trap_exit, true),
     atomizer_output:start_link(),
-    run(CmdArgs),
-    ExitCode = wait(),
-    atomizer_output:stop(),
-    erlang:halt(ExitCode).
+    ExitCode = run(CmdArgs),
+    atomizer_output:stop(ExitCode).
 
 -spec run([string()]) -> ok.
 run(CmdArgs) ->
     case atomizer_cli_options:parse(CmdArgs) of
         {options, Options} ->
-            Package = atomizer_cli_options:package(Options),
             atomizer_cli_options:init(Options),
+            Package = atomizer_cli_options:package(Options),
             Action = atomizer_cli_options:get_action(),
-            atomizer_sup:start_link(Package, Action);
+            atomizer_sup:start_link(Package, Action),
+            receive
+                {'EXIT', _Pid, {shutdown, {ok, {Atoms, Stats}}}} ->
+                    case atomizer_cli_options:get_action() of
+                        list -> list_atoms(Atoms, Stats);
+                        show -> show_atoms(Atoms, Stats);
+                        warn -> show_loose_atoms(Atoms, Stats)
+                    end;
+
+                {'EXIT', _Pid, {shutdown, {error, Error}}} ->
+                    atomizer:error(Error),
+                    ?EXIT_CODE_FAILURE
+            end;
 
         {message, Message} ->
             atomizer:print(Message),
-            erlang:halt(?EXIT_CODE_SUCCESS);
+            ?EXIT_CODE_SUCCESS;
 
         {error, Error} ->
-            atomizer:error(Error),
-            erlang:halt(?EXIT_CODE_FAILURE)
-    end.
-
--spec wait() -> exit_code().
-wait() ->
-    receive
-        {'EXIT', _Pid, {shutdown, {ok, {Atoms, Stats}}}} ->
-            case atomizer_cli_options:get_action() of
-                list -> list_atoms(Atoms, Stats);
-                show -> show_atoms(Atoms, Stats);
-                warn -> show_loose_atoms(Atoms, Stats)
-            end;
-
-        {'EXIT', _Pid, {shutdown, {error, Error}}} ->
             atomizer:error(Error),
             ?EXIT_CODE_FAILURE
     end.

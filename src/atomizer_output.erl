@@ -7,13 +7,15 @@
     put_chars/2,
     set_banner/1,
     hide_banner/0,
-    stop/0,
+    stop/1,
 
     init/1,
     handle_call/3,
     handle_cast/2,
     terminate/2
 ]).
+
+-type exit_code() :: non_neg_integer().
 
 -spec start_link() -> {ok, pid()} | {error, term()}.
 start_link() ->
@@ -34,9 +36,9 @@ set_banner(Banner) ->
 hide_banner() ->
     gen_server:cast(?MODULE, hide_banner).
 
--spec stop() -> ok.
-stop() ->
-    gen_server:stop(?MODULE).
+-spec stop(exit_code()) -> ok.
+stop(ExitCode) ->
+    gen_server:stop(?MODULE, ExitCode, _Timeout = infinity).
 
 handle_call(_Msg, _From, State) ->
     {noreply, State}.
@@ -58,8 +60,9 @@ handle_cast(hide_banner, LastShownBanner) ->
     erase_banner(LastShownBanner),
     {noreply, ""}.
 
-terminate(_Reason, LastShownBanner) ->
-    erase_banner(LastShownBanner).
+terminate(ExitCode, LastShownBanner) ->
+    erase_banner(LastShownBanner),
+    erlang:halt(ExitCode).
 
 
 -define(HIDE_CURSOR, "\e[?25l").
