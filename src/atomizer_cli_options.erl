@@ -156,7 +156,7 @@ parse_verbosity(_)   -> nok.
 usage() ->
     "Usage: atomizer [-a | --action ACTION] [-b | --parse-beams]\n" ++
     "                [-x | --ignore PATH*] [-i | -I | --include PATH*]\n" ++
-    "                [-l | --follow-symlinks] [-w | --warn-errors]\n"
+    "                [-r | --non-recursive] [-l | --follow-symlinks] [-w | --warn-errors]\n"
     "                [-v | --verbosity VERBOSITY] [-c | --colors] PATH*\n".
 
 help() ->
