@@ -9,7 +9,7 @@
 
 -export([
     start_link/2,
-    detect_sources/2,
+    detect_sources/3,
     format_error/1
 ]).
 
@@ -80,7 +80,7 @@ loop(#state{pool = Pool, queue = Queue} = State) ->
 traverse(Package, Dir) ->
     case list_dir(Dir) of
         {ok, Paths} ->
-            case detect_sources(Paths, Package) of
+            case detect_sources(Paths, Package, _TolerateErrors = true) of
                 {ok, Files, Dirs} ->
                     lists:foreach(fun atomizer_sup:file/1, Files),
                     lists:foreach(fun add_dir/1, Dirs);
@@ -104,9 +104,9 @@ list_dir(Dir) ->
             end
     end.
 
--spec detect_sources(Paths :: [file:filename()], atomizer:package()) ->
+-spec detect_sources(Paths :: [file:filename()], atomizer:package(), boolean()) ->
     {ok, Files :: [atomizer:file()], Dirs :: [file:filename()]} | {error, atomizer:error()}.
-detect_sources(Paths, Package) ->
+detect_sources(Paths, Package, TolerateErrors) ->
     Collect = fun (_, {error, Error}) -> {error, Error};
                   (Path, {ok, Files, Dirs}) ->
                       case detect_source(Path, Package) of
@@ -114,7 +114,7 @@ detect_sources(Paths, Package) ->
                           {ok, File} -> {ok, [File | Files], Dirs};
                           ignore -> {ok, Files, Dirs};
                           {error, Error} ->
-                              case atomizer_cli_options:get_warn_errors() of
+                              case TolerateErrors andalso atomizer_cli_options:get_warn_errors() of
                                   true ->
                                       atomizer:warning(Error),
                                       {ok, Files, Dirs};

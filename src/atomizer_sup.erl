@@ -36,7 +36,7 @@ start_link(Package, Action) ->
 init([Package, Action]) ->
     process_flag(trap_exit, true),
     Paths = atomizer:package_paths(Package),
-    case atomizer_traverse:detect_sources(Paths, Package) of
+    case atomizer_traverse:detect_sources(Paths, Package, _TolerateErrors = false) of
         {ok, Files, Dirs} ->
             {ok, Traverse} = atomizer_traverse:start_link(Dirs, Package),
             {ok, #state{
