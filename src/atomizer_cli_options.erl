@@ -97,6 +97,15 @@ parse_option(Option, CmdArgs, Options) ->
         _Includes when Option == "i"; Option == "I"; Option == "-include" ->
             parse_includes(CmdArgs, Options);
 
+        _IncludeFile when Option == "-include-file" ->
+            case parse_option_include_file(CmdArgs) of
+                {ok, Includes, TailCmdArgs} ->
+                    parse(TailCmdArgs, Options#options{includes = Includes});
+
+                {error, Error} ->
+                    {error, Error}
+            end;
+
         _Recursive when Option == "r"; Option == "-non-recursive" ->
             parse(CmdArgs, Options#options{recursive = false});
 
@@ -139,6 +148,21 @@ parse_action("show") -> {ok, show};
 parse_action("warn") -> {ok, warn};
 parse_action(_)      -> nok.
 
+-spec parse_option_include_file([string()]) -> {ok, [file:filename()], [string()]} | {error, error()}.
+parse_option_include_file([]) -> {error, {missing_argument, include_file}};
+parse_option_include_file([CmdArg | CmdArgs]) ->
+    case parse_include_file(CmdArg) of
+        {ok, Includes} -> {ok, Includes, CmdArgs};
+        nok -> {error, {file_error, CmdArg}}
+    end.
+
+-spec parse_include_file(file:filename()) -> {ok, [file:filename()]} | nok.
+parse_include_file(Filename) ->
+    case file:read_file(Filename) of
+        {ok, Binary} -> {ok, string:tokens(erlang:binary_to_list(Binary), "\n")};
+        {error, _Reason} -> nok
+    end.
+
 -spec parse_option_verbosity([string()]) -> {ok, verbosity(), [string()]} | {error, error()}.
 parse_option_verbosity([]) -> {error, {missing_argument, verbosity}};
 parse_option_verbosity([CmdArg | CmdArgs]) ->
@@ -154,8 +178,8 @@ parse_verbosity("2") -> {ok, 2};
 parse_verbosity(_)   -> nok.
 
 usage() ->
-    "Usage: atomizer [-a | --action ACTION] [-b | --parse-beams]\n" ++
-    "                [-x | --ignore PATH*] [-i | -I | --include PATH*]\n" ++
+    "Usage: atomizer [-a | --action ACTION] [-b | --parse-beams]\n"
+    "                [-x | --ignore PATH*] [-i | -I | --include PATH* | --include-file PATH]\n"
     "                [-r | --non-recursive] [-l | --follow-symlinks] [-w | --warn-errors]\n"
     "                [-v | --verbosity VERBOSITY] [-c | --colors] PATH*\n".
 
