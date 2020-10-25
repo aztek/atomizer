@@ -26,6 +26,7 @@
     paths           = []    :: [file:filename()],
     ignores         = []    :: [file:filename()],
     includes        = []    :: [file:filename()],
+    recursive       = true  :: boolean(),
     follow_symlinks = false :: boolean(),
     parse_beams     = false :: boolean(),
     warn_errors     = false :: boolean(),
@@ -95,6 +96,9 @@ parse_option(Option, CmdArgs, Options) ->
 
         _Includes when Option == "i"; Option == "I"; Option == "-include" ->
             parse_includes(CmdArgs, Options);
+
+        _Recursive when Option == "r"; Option == "-non-recursive" ->
+            parse(CmdArgs, Options#options{recursive = false});
 
         _FollowSymlinks when Option == "l"; Option == "-follow-symlinks" ->
             parse(CmdArgs, Options#options{follow_symlinks = true});
@@ -167,10 +171,11 @@ package(Options) ->
         paths           = Paths,
         ignores         = Ignores,
         includes        = Includes,
+        recursive       = Recursive,
         follow_symlinks = FollowSymlinks,
         parse_beams     = ParseBeams
     } = Options,
-    atomizer:package(Paths, Ignores, Includes, FollowSymlinks, ParseBeams).
+    atomizer:package(Paths, Ignores, Includes, Recursive, FollowSymlinks, ParseBeams).
 
 
 %%% Global dictionary of command line arguments populated at startup

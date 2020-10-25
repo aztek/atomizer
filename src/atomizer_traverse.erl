@@ -83,7 +83,10 @@ traverse(Package, Dir) ->
             case detect_sources(Paths, Package, _TolerateErrors = true) of
                 {ok, Files, Dirs} ->
                     lists:foreach(fun atomizer_sup:file/1, Files),
-                    lists:foreach(fun add_dir/1, Dirs);
+                    case atomizer:package_recursive(Package) of
+                        true  -> lists:foreach(fun add_dir/1, Dirs);
+                        false -> ok
+                    end;
                 {error, Error} -> {error, Error}
             end;
 

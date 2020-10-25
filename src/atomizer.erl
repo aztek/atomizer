@@ -1,10 +1,11 @@
 -module(atomizer).
 
 -export([
-    package/5,
+    package/6,
     package_paths/1,
     package_ignores/1,
     package_includes/1,
+    package_recursive/1,
     package_follow_symlinks/1,
     package_parse_beams/1,
 
@@ -64,17 +65,20 @@
     paths           = []    :: [file:filename()],
     ignores         = []    :: [file:filename()],
     includes        = []    :: [file:filename()],
+    recursive       = true  :: boolean(),
     follow_symlinks = false :: boolean(),
     parse_beams     = false :: boolean()
 }).
 -opaque package() :: #package{}.
 
--spec package([file:filename()], [file:filename()], [file:filename()], boolean(), boolean()) -> package().
-package(Paths, Ignores, Includes, FollowSymlinks, ParseBeams) ->
+-spec package([file:filename()], [file:filename()], [file:filename()],
+              boolean(), boolean(), boolean()) -> package().
+package(Paths, Ignores, Includes, Recursive, FollowSymlinks, ParseBeams) ->
     #package{
         paths           = Paths,
         ignores         = Ignores,
         includes        = Includes,
+        recursive       = Recursive,
         follow_symlinks = FollowSymlinks,
         parse_beams     = ParseBeams
     }.
@@ -87,6 +91,9 @@ package_ignores(#package{ignores = Ignores}) -> Ignores.
 
 -spec package_includes(package()) -> [file:filename()].
 package_includes(#package{includes = Includes}) -> Includes.
+
+-spec package_recursive(package()) -> boolean().
+package_recursive(#package{recursive = Recursive}) -> Recursive.
 
 -spec package_follow_symlinks(package()) -> boolean().
 package_follow_symlinks(#package{follow_symlinks = FollowSymlinks}) -> FollowSymlinks.
