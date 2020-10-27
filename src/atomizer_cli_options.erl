@@ -246,6 +246,9 @@ format_error({unrecognized_option, Option}) ->
 format_error({missing_argument, Option}) ->
     ["Malformed arguments - ", atom_to_list(Option), "is missing."];
 
+format_error({file_error, Filename}) ->
+    ["Unable to read the file ", Filename, "."];
+
 format_error({incorrect_value, Option}) ->
     SupportedValues = case Option of
                           action    -> "list, show and warn";
