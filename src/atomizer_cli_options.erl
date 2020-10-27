@@ -13,7 +13,6 @@
 
 -export_type([
     options/0,
-    action/0,
     verbosity/0,
     error/0
 ]).
@@ -22,7 +21,7 @@
 %%% The type of command line options
 
 -record(options, {
-    action          = warn  :: action(),
+    action          = warn  :: atomizer:action(),
     paths           = []    :: [file:filename()],
     ignores         = []    :: [file:filename()],
     includes        = []    :: [file:filename()],
@@ -35,7 +34,6 @@
 }).
 -opaque options() :: #options{}.
 
--type action() :: list | show | warn.
 -type verbosity() :: 0 | 1 | 2. % 0 is least verbose, 2 is most verbose
 
 
@@ -134,7 +132,7 @@ parse_option(Option, CmdArgs, Options) ->
             {error, {unrecognized_option, Option}}
     end.
 
--spec parse_option_action([string()]) -> {ok, action(), [string()]} | {error, error()}.
+-spec parse_option_action([string()]) -> {ok, atomizer:action(), [string()]} | {error, error()}.
 parse_option_action([]) -> {error, {missing_argument, action}};
 parse_option_action([CmdArg | CmdArgs]) ->
     case parse_action(CmdArg) of
@@ -142,7 +140,7 @@ parse_option_action([CmdArg | CmdArgs]) ->
         nok -> {error, {incorrect_value, action}}
     end.
 
--spec parse_action(string()) -> {ok, action()} | nok.
+-spec parse_action(string()) -> {ok, atomizer:action()} | nok.
 parse_action("list") -> {ok, list};
 parse_action("show") -> {ok, show};
 parse_action("warn") -> {ok, warn};
@@ -234,7 +232,7 @@ get_colors() ->
     Options = get_options(),
     Options#options.colors.
 
--spec get_action() -> action().
+-spec get_action() -> atomizer:action().
 get_action() ->
     Options = get_options(),
     Options#options.action.

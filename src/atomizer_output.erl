@@ -60,6 +60,7 @@ handle_cast(hide_banner, LastShownBanner) ->
     erase_banner(LastShownBanner),
     {noreply, ""}.
 
+-spec terminate(exit_code(), string()) -> no_return().
 terminate(ExitCode, LastShownBanner) ->
     erase_banner(LastShownBanner),
     erlang:halt(ExitCode).

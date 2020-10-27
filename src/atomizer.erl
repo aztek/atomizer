@@ -22,6 +22,8 @@
 
     format_error/1,
 
+    run/2,
+
     print/1,
     nl/0,
     error/1,
@@ -33,6 +35,7 @@
 ]).
 
 -export_type([
+    action/0,
     file/0,
     source/0,
     atoms/0,
@@ -57,6 +60,8 @@
 
 -type atom_info()   :: {atom(), locations()}.
 -type loose_atom()  :: {LooseAtom :: atom_info(), Lookalike :: atom_info()}.
+
+-type action() :: list | show | warn.
 
 
 %%% Packages
@@ -163,6 +168,21 @@ global_ignores() ->
 -spec format_error(error()) -> io_lib:chars().
 format_error({Module, Error}) -> Module:format_error(Error);
 format_error(MalformedError) -> io_lib:format("Unexpected error ~p", [MalformedError]).
+
+
+%%%
+
+-spec run(package(), action()) -> {ok, {[loose_atom()] | atoms(), statistics()}} | {error, error()}.
+run(Package, Action) ->
+    process_flag(trap_exit, true),
+    atomizer_sup:start_link(Package, Action),
+    receive
+        {'EXIT', _Pid, {shutdown, {ok, {Atoms, Stats}}}} ->
+            {ok, {Atoms, Stats}};
+
+        {'EXIT', _Pid, {shutdown, {error, Error}}} ->
+            {error, Error}
+    end.
 
 
 %%% Printing to standard outputs

@@ -16,23 +16,22 @@ main(CmdArgs) ->
     ExitCode = run(CmdArgs),
     atomizer_output:stop(ExitCode).
 
--spec run([string()]) -> ok.
+-spec run([string()]) -> exit_code().
 run(CmdArgs) ->
     case atomizer_cli_options:parse(CmdArgs) of
         {options, Options} ->
             atomizer_cli_options:init(Options),
             Package = atomizer_cli_options:package(Options),
             Action = atomizer_cli_options:get_action(),
-            atomizer_sup:start_link(Package, Action),
-            receive
-                {'EXIT', _Pid, {shutdown, {ok, {Atoms, Stats}}}} ->
+            case atomizer:run(Package, Action) of
+                {ok, {Atoms, Stats}} ->
                     case atomizer_cli_options:get_action() of
                         list -> list_atoms(Atoms, Stats);
                         show -> show_atoms(Atoms, Stats);
                         warn -> show_loose_atoms(Atoms, Stats)
                     end;
 
-                {'EXIT', _Pid, {shutdown, {error, Error}}} ->
+                {error, Error} ->
                     atomizer:error(Error),
                     ?EXIT_CODE_FAILURE
             end;
