@@ -214,7 +214,7 @@ init(Options) ->
 
 -spec get_options() -> options().
 get_options() ->
-    case ets:lookup(?CLI_TABLE, options) of
+    case ets:info(?CLI_TABLE) /= undefined andalso ets:lookup(?CLI_TABLE, options) of
         [{options, Options}] -> Options;
         _ -> #options{}
     end.
