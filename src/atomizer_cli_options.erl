@@ -40,8 +40,9 @@
 %%% Parsing of command line options
 
 -type error() :: {unrecognized_option, string()}
-               | {missing_argument, action | verbosity}
-               | {incorrect_value,  action | verbosity}.
+               | {missing_argument, action | verbosity | include_file}
+               | {incorrect_value,  action | verbosity}
+               | {file_error, file:filename()}.
 
 -spec parse([string()]) -> {options, options()} | {message, string()} | {error, atomizer:error()}.
 parse(CmdArgs) ->
