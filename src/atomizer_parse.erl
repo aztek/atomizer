@@ -60,7 +60,7 @@ parse(Package, File) ->
         ok -> ok;
         {error, Error} ->
             case atomizer_cli_options:get_warn_errors() of
-                true  -> atomizer_output:warning(Error);
+                true  -> atomizer_sup:warn(Error);
                 false -> {error, Error}
             end
     end.
@@ -100,14 +100,14 @@ parse_epp(Epp) ->
 
         {warning, {Line, Module, Warning}} ->
             ExtendedWarning = {?MODULE, {{get(filename), Line}, {warning, {Module, Warning}}}},
-            atomizer_output:warning(ExtendedWarning),
+            atomizer_sup:warn(ExtendedWarning),
             parse_epp(Epp);
 
         {error, {Line, Module, Error}} ->
             ExtendedError = {?MODULE, {{get(filename), Line}, {error, {Module, Error}}}},
             case atomizer_cli_options:get_warn_errors() of
                 true ->
-                    atomizer_output:warning(ExtendedError),
+                    atomizer_sup:warn(ExtendedError),
                     parse_epp(Epp);
                 false ->
                     {error, ExtendedError}

@@ -9,6 +9,7 @@
     done_file/1,
     atom/3,
     lookalikes/2,
+    warn/1,
 
     init/1,
     handle_call/3,
@@ -70,6 +71,10 @@ atom(Atom, File, Position) ->
 lookalikes(Atom, Lookalike) ->
     gen_server:cast(?MODULE, {lookalikes, Atom, Lookalike}).
 
+-spec warn(atomizer:error()) -> ok.
+warn(Warning) ->
+    gen_server:cast(?MODULE, {warn, Warning}).
+
 handle_call(_Request, _From, State) ->
     {noreply, State}.
 
@@ -90,7 +95,11 @@ handle_cast({atom, Atom, File, Position}, State) ->
     {noreply, State#state{atoms = add_atom_location(Atom, File, Position, State#state.atoms)}};
 
 handle_cast({lookalikes, Atom, Lookalike}, State) ->
-    {noreply, State#state{lookalikes = sets:add_element({Atom, Lookalike}, State#state.lookalikes)}}.
+    {noreply, State#state{lookalikes = sets:add_element({Atom, Lookalike}, State#state.lookalikes)}};
+
+handle_cast({warn, Warning}, State) ->
+    atomizer_output:warning(Warning),
+    {noreply, State}.
 
 handle_info({'EXIT', _Pid, {error, Error}}, State) ->
     {stop, {shutdown, {error, Error}}, State};

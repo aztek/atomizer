@@ -102,7 +102,7 @@ list_dir(Dir) ->
         {error, Error} ->
             ExtendedError = {?MODULE, {Dir, {file, Error}}},
             case atomizer_cli_options:get_warn_errors() of
-                true  -> atomizer_output:warning(ExtendedError), {ok, []};
+                true  -> atomizer_sup:warn(ExtendedError), {ok, []};
                 false -> {error, ExtendedError}
             end
     end.
@@ -119,7 +119,7 @@ detect_sources(Paths, Package, TolerateErrors) ->
                           {error, Error} ->
                               case TolerateErrors andalso atomizer_cli_options:get_warn_errors() of
                                   true ->
-                                      atomizer_output:warning(Error),
+                                      atomizer_sup:warn(Error),
                                       {ok, Files, Dirs};
                                   false ->
                                       {error, Error}
