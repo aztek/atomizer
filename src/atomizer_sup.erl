@@ -19,7 +19,7 @@
 
 -record(state, {
     package :: atomizer:package(),
-    action :: atomizer_cli_options:action(),
+    action :: atomizer:action(),
     files = sets:new() :: sets:set(atomizer:file()),
     atoms = maps:new() :: atomizer:atoms(),
     lookalikes = sets:new() :: atomizer:lookalikes(),
@@ -30,7 +30,7 @@
     atomizer_compare  :: pid() | undefined
 }).
 
--spec start_link(atomizer:package(), atomizer_cli_options:action()) -> {ok, pid()} | {error, term()}.
+-spec start_link(atomizer:package(), atomizer:action()) -> {ok, pid()} | {error, term()}.
 start_link(Package, Action) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [Package, Action], []).
 
