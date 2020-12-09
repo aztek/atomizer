@@ -102,7 +102,7 @@ show_locations(Locations) ->
 show_location(File, Positions, NrPositions) ->
     case atomizer_cli_options:get_verbosity() of
         0 ->
-            Occurrences = [integer_to_list(NrPositions), " ", atomizer:plural(NrPositions, "occurrence", "occurrences")],
+            Occurrences = pretty_quantity(NrPositions, "occurrence", "occurrences"),
             atomizer_output:print([File, " ", atomizer_color:cyan(["(", Occurrences, ")"])]);
         _ ->
             ShowPosition = fun (Position) -> atomizer_output:print([File, ":" | show_position(Position)]) end,
