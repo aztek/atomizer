@@ -32,16 +32,16 @@ run(CmdArgs) ->
                     end;
 
                 {error, Error} ->
-                    atomizer:error(Error),
+                    atomizer_output:error(Error),
                     ?EXIT_CODE_FAILURE
             end;
 
         {message, Message} ->
-            atomizer:print(Message),
+            atomizer_output:print(Message),
             ?EXIT_CODE_SUCCESS;
 
         {error, Error} ->
-            atomizer:error(Error),
+            atomizer_output:error(Error),
             ?EXIT_CODE_FAILURE
     end.
 
@@ -63,7 +63,7 @@ list_atom(Atom, Locations) ->
     NrFiles = atomizer:nr_files(Locations),
     Columns = [atomizer:pretty_atom(Atom), integer_to_list(NrOccurrences)] ++
               [integer_to_list(NrFiles) || Verbosity == 2],
-    atomizer:print(lists:join("\t", Columns)).
+    atomizer_output:print(lists:join("\t", Columns)).
 
 -spec show_atoms(atomizer:atoms(), atomizer:statistics()) -> exit_code().
 show_atoms(Atoms, Stats) ->
@@ -83,7 +83,8 @@ show_abridged_list(Printer, List) ->
     case length(List) of
         ListLength when Verbosity =< 1, ListLength > PreviewLength + 1 ->
             lists:foreach(Printer, lists:sublist(List, PreviewLength)),
-            atomizer:print(["... ", atomizer_color:cyan(["(", integer_to_list(ListLength - PreviewLength), " more)"])]);
+            ThisMany = integer_to_list(ListLength - PreviewLength),
+            atomizer_output:print(["... ", atomizer_color:cyan(["(", ThisMany, " more)"])]);
         _ ->
             lists:foreach(Printer, List)
     end.
@@ -95,16 +96,16 @@ show_locations(Locations) ->
     Files = lists:reverse(lists:keysort(3, Info)),
     ShowLocation = fun ({File, Positions, NrPositions}) -> show_location(File, Positions, NrPositions) end,
     show_abridged_list(ShowLocation, Files),
-    atomizer:nl().
+    atomizer_output:nl().
 
 -spec show_location(file:filename(), [atomizer:position()], non_neg_integer()) -> ok.
 show_location(File, Positions, NrPositions) ->
     case atomizer_cli_options:get_verbosity() of
         0 ->
             Occurrences = [integer_to_list(NrPositions), " ", atomizer:plural(NrPositions, "occurrence", "occurrences")],
-            atomizer:print([File, " ", atomizer_color:cyan(["(", Occurrences, ")"])]);
+            atomizer_output:print([File, " ", atomizer_color:cyan(["(", Occurrences, ")"])]);
         _ ->
-            ShowPosition = fun (Position) -> atomizer:print([File, ":" | show_position(Position)]) end,
+            ShowPosition = fun (Position) -> atomizer_output:print([File, ":" | show_position(Position)]) end,
             show_abridged_list(ShowPosition, Positions)
     end.
 
@@ -135,7 +136,7 @@ show_statistics(Stats) ->
                 false -> ["Found"]
             end,
     Message = Found ++ [ThisManyAtoms, "in", ThisManyFiles, "and", ThisManyDirs],
-    atomizer:print([atomizer:words(Message), "."]).
+    atomizer_output:print([atomizer:words(Message), "."]).
 
 -spec pretty_quantity(non_neg_integer(), string(), string()) -> io_lib:chars().
 pretty_quantity(Amount, Singular, Plural) ->
@@ -143,12 +144,12 @@ pretty_quantity(Amount, Singular, Plural) ->
 
 -spec show_atom(atomizer:atom_info()) -> ok.
 show_atom({Atom, Locations}) ->
-    atomizer:print(atomizer_color:bold(atomizer:pretty_atom(Atom))),
+    atomizer_output:print(atomizer_color:bold(atomizer:pretty_atom(Atom))),
     show_locations(Locations).
 
 -spec show_atom(atomizer:atom_info(), atom()) -> ok.
 show_atom({Atom, Locations}, Lookalike) ->
-    atomizer:print(atomizer_color:bold(show_difference(Atom, Lookalike))),
+    atomizer_output:print(atomizer_color:bold(show_difference(Atom, Lookalike))),
     show_locations(Locations).
 
 -spec show_difference(atom(), atom()) -> io_lib:chars().
@@ -170,5 +171,5 @@ show_difference_helper([K | Loose], [C | Lookalike]) ->
 show_loose_atom({_Loose, _} = {LooseAtomInfo, {Lookalike, _} = LookalikeAtomInfo}) ->
     show_atom(LooseAtomInfo, Lookalike),
     show_atom(LookalikeAtomInfo),
-    atomizer:print(lists:duplicate(80, $=)),
-    atomizer:nl().
+    atomizer_output:print(lists:duplicate(80, $=)),
+    atomizer_output:nl().

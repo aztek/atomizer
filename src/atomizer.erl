@@ -24,11 +24,6 @@
 
     run/2,
 
-    print/1,
-    nl/0,
-    error/1,
-    warning/1,
-
     pretty_atom/1,
     words/1,
     plural/3
@@ -182,29 +177,6 @@ run(Package, Action) ->
 
         {'EXIT', _Pid, {shutdown, {error, Error}}} ->
             {error, Error}
-    end.
-
-
-%%% Printing to standard outputs
-
-print(Message) ->
-    atomizer_output:put_chars(standard_io, [Message, "\n"]).
-
-nl() ->
-    atomizer_output:put_chars(standard_io, "\n").
-
--spec error(error()) -> ok.
-error(Error) ->
-    Message = [atomizer_color:bold("Error: ") | format_error(Error)],
-    atomizer_output:put_chars(standard_error, [atomizer_color:red(Message), "\n"]).
-
--spec warning(error()) -> ok.
-warning(Warning) ->
-    case atomizer_cli_options:get_verbosity() of
-        0 -> ok;
-        _ ->
-            Message = [atomizer_color:bold("Warning: ") | format_error(Warning)],
-            atomizer_output:put_chars(standard_error, [atomizer_color:yellow(Message), "\n"])
     end.
 
 

@@ -4,7 +4,10 @@
 
 -export([
     start_link/0,
-    put_chars/2,
+    print/1,
+    nl/0,
+    error/1,
+    warning/1,
     set_banner/1,
     hide_banner/0,
     stop/1,
@@ -39,6 +42,28 @@ hide_banner() ->
 -spec stop(exit_code()) -> ok.
 stop(ExitCode) ->
     gen_server:stop(?MODULE, ExitCode, _Timeout = infinity).
+
+
+print(Message) ->
+    put_chars(standard_io, [Message, "\n"]).
+
+nl() ->
+    put_chars(standard_io, "\n").
+
+-spec error(atomizer:error()) -> ok.
+error(Error) ->
+    Message = [atomizer_color:bold("Error: ") | atomizer:format_error(Error)],
+    put_chars(standard_error, [atomizer_color:red(Message), "\n"]).
+
+-spec warning(atomizer:error()) -> ok.
+warning(Warning) ->
+    case atomizer_cli_options:get_verbosity() of
+        0 -> ok;
+        _ ->
+            Message = [atomizer_color:bold("Warning: ") | atomizer:format_error(Warning)],
+            put_chars(standard_error, [atomizer_color:yellow(Message), "\n"])
+    end.
+
 
 handle_call(_Msg, _From, State) ->
     {noreply, State}.
